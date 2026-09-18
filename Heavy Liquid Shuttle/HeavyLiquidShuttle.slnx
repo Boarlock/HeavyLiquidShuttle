@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="../HeavyLiquidShuttle.DubsBadHygiene/HeavyLiquidShuttle.DubsBadHygiene.csproj" />
+  <Project Path="HeavyLiquidShuttle.csproj" />
+</Solution>

@@ -27,15 +27,13 @@ mono_crash.*
 [Dd]ebugPublic/x64/
 [Rr]elease/x64/
 [Rr]eleases/x64/
-bin/x64/
-obj/x64/
+**/bin/
+**/obj/
 
 [Dd]ebug/x86/
 [Dd]ebugPublic/x86/
 [Rr]elease/x86/
 [Rr]eleases/x86/
-bin/x86/
-obj/x86/
 
 [Ww][Ii][Nn]32/
 [Aa][Rr][Mm]/
@@ -428,7 +426,11 @@ FodyWeavers.xsd
 *.msp
 
 # VS folder
-.vs/
+**/.vs/
 
 # Libraries folder
-Lib/
+**/Lib/
+
+# Image and Asset files for Project
+_assets/
+_images/

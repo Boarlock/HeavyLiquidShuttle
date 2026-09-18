@@ -1,24 +1,18 @@
 ﻿using DubsBadHygiene;
-using RimWorld;
 using System.Collections.Generic;
 using Verse;
 
-namespace CargoShuttle
+namespace HeavyLiquidShuttleMod
 {
     public class ShuttleWater
     {
-        public static PlumbingNet? CheckCellsAroundShuttle(Thing shuttle)
+        public static PlumbingNet? CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle)
         {
             if (shuttle == null)
                 return null;
 
-            CompCargoShuttle shuttleComp = shuttle.TryGetComp<CompCargoShuttle>();
-
-            if (shuttleComp == null)
-                return null;
-
             // Make sure the shuttle is on a non-null worldspace currently.
-            Map map = shuttle.Map;
+            Map map = shuttle.parent.Map;
 
             if (map == null)
                 return null;
@@ -26,7 +20,7 @@ namespace CargoShuttle
             HashSet<IntVec3> adjacentTilesSet = new HashSet<IntVec3>();
 
             // Get the cells adjacent to the shuttle.
-            foreach (IntVec3 shuttleCell in shuttle.OccupiedRect())
+            foreach (IntVec3 shuttleCell in shuttle.parent.OccupiedRect())
             {
                 foreach (IntVec3 adjCell in GenAdjFast.AdjacentCells8Way(shuttleCell))
                 {
@@ -35,7 +29,7 @@ namespace CargoShuttle
             }
 
             // Remove the shuttle cells themselves from adjacent cell list.
-            foreach (IntVec3 shuttleCell in shuttle.OccupiedRect())
+            foreach (IntVec3 shuttleCell in shuttle.parent.OccupiedRect())
             {
                 adjacentTilesSet.Remove(shuttleCell);
             }
@@ -69,9 +63,12 @@ namespace CargoShuttle
             if (shuttle == null)
                 return;
 
-            CompCargoShuttle shuttleComp = shuttle.TryGetComp<CompCargoShuttle>();
+            HeavyLiquidShuttle shuttleComp = shuttle.TryGetComp<HeavyLiquidShuttle>();
 
-            if (shuttleComp == null || shuttleComp.AdjacentPlumbingNet == null)
+            if (shuttleComp == null)
+                return;
+
+            if (!DubsBadHygieneIntegration.AdjacentNetworks.TryGetValue(shuttleComp, out var net))
                 return;
 
             float amountToTransfer = shuttleComp.WaterStorage;
@@ -79,13 +76,15 @@ namespace CargoShuttle
             if (amountToTransfer <= 0f)
                 return;
 
-            float remaining = shuttleComp.AdjacentPlumbingNet.PushWater(amountToTransfer);
+            float remaining = net.PushWater(amountToTransfer);
             float transferred = amountToTransfer - remaining;
 
             if (transferred <= 0f)
                 return;
 
             shuttleComp.WaterStorage -= transferred;
+
+            MassPatch.NotifyLiquidMassChanged(shuttleComp);
         }
     }
 }
