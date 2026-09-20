@@ -1,0 +1,176 @@
+﻿using DubsBadHygiene;
+using HarmonyLib;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using UnityEngine;
+using Verse;
+using Verse.AI;
+
+namespace HeavyLiquidShuttleMod
+{
+    [HarmonyPatch(typeof(PlumbingNet), nameof(PlumbingNet.PushWater))]
+    public static class DubsBadHygiene_HarmonyPatches
+
+    {
+        private static readonly Dictionary<HeavyLiquidShuttle, PendingNetworkState> 
+            PendingNetworks = new Dictionary<HeavyLiquidShuttle, PendingNetworkState>();
+
+        private static void EnqueueNetwork(HeavyLiquidShuttle shuttle, PlumbingNet net)
+        {
+            if (!PendingNetworks.TryGetValue(shuttle, out PendingNetworkState state))
+            {
+                state = new PendingNetworkState();
+                PendingNetworks[shuttle] = state;
+            }
+
+            if (state.Set.Add(net))
+                state.Queue.Enqueue(net);
+        }
+
+        public static void Prefix(float waterBufferToDistribute, PlumbingNet __instance, out PushWaterState __state)
+        {
+            __state = new PushWaterState();
+
+            // See if our shuttle is connected to this Net.
+            HeavyLiquidShuttle? shuttle = null;
+
+            foreach (KeyValuePair<HeavyLiquidShuttle, HashSet<PlumbingNet>> entry in DubsBadHygieneIntegration.AdjacentNetworks)
+            {
+                foreach (PlumbingNet net in entry.Value)
+                {
+                    if (net != __instance)
+                        continue;
+
+                    shuttle = entry.Key;
+                    break;
+                }
+            }
+
+            if (shuttle == null)
+                return;
+
+            TankState? tank = shuttle.GetTankForContent(TankState.StoredType.Water);
+
+            if (tank == null)
+                return;
+
+            __state.Instance = __instance;
+            __state.WaterToDistributeBefore = waterBufferToDistribute;
+            __state.Tank = tank;
+            __state.Shuttle = shuttle;
+
+            foreach (CompWaterStorage waterTower in __instance.WaterTowers)
+            {
+                __state.WaterStorages[waterTower] = waterTower.WaterStorage;
+            }
+            
+
+        }
+        public static void Postfix(PushWaterState __state, ref float __result)
+        {
+            // This PushWater call was not associated with one of our shuttles.
+            if (__state.Instance == null || __state.Tank == null || __state.Shuttle == null)
+                return;
+
+            // See which DBH towers actually received water from this shuttle.
+            foreach (KeyValuePair<CompWaterStorage, float> entry in __state.WaterStorages)
+            {
+                CompWaterStorage waterTower = entry.Key;
+                float before = entry.Value;
+
+                if (waterTower.WaterStorage > before && __state.Tank.IsContaminated && __state.Tank.IsTransferringFluid)
+                {
+                    waterTower.WaterQuality = ContaminationLevel.Contaminated;
+                }
+            }
+
+            // If DBH completely satisfied the request, nothing remains for us.
+            if (__result <= 0f)
+                return;
+
+            if (__state.Tank.IsTransferringFluid)
+                return;
+
+            if (__state.Tank.ReceiveAllowance <= 0f)
+            {
+                EnqueueNetwork(__state.Shuttle, __state.Instance);
+                return;
+            }
+
+            if (PendingNetworks.TryGetValue(__state.Shuttle, out PendingNetworkState state) && state.Queue.Count > 0)
+            {
+                // Network in Queue has become stale.
+                if (__state.Tank.Counter >= 2)
+                {
+                    PlumbingNet staleNetwork = state.Queue.Dequeue();
+
+                    state.Set.Remove(staleNetwork);
+
+                    return;
+                }
+
+                // Check current call against next item in the Queue
+                if (state.Queue.Peek() != __state.Instance)
+                    return;
+
+                // This network is now being served.
+                state.Queue.Dequeue();
+
+                state.Set.Remove(__state.Instance);
+            }
+
+            //Reset the Queue counter
+            __state.Tank.Counter = 0;
+
+            // Safer way to update storage so this method only gives what was taken.
+            float freeCapacity = __state.Tank.TankCapacity - __state.Tank.TankStorage;
+
+            if (freeCapacity <= 0f)
+                return;
+
+            float accepted = Mathf.Min(__result, (float)__state.Tank.ReceiveAllowance, freeCapacity);
+
+            if (accepted <= 0f)
+                return;
+
+            // Update shuttle's mass and water storage.
+            __state.Tank.Content = TankState.StoredType.Water;
+            __state.Tank.TankStorage += accepted;
+            __state.Tank.ReceiveAllowance -= accepted;
+            __state.Tank.IsContaminated = __state.Instance.IsNetContaminated();
+
+            MassPatch.NotifyLiquidMassChanged(__state.Shuttle);
+
+            if (!DubsBadHygieneIntegration.RecentNetworkActivity.TryGetValue(__state.Shuttle, out HashSet<PlumbingNet>? activity))
+            {
+                activity = new HashSet<PlumbingNet>();
+
+                DubsBadHygieneIntegration.RecentNetworkActivity[__state.Shuttle] = activity;
+            }
+
+            activity.Add(__state.Instance);
+
+            __result -= accepted;
+        }
+    }
+
+    public class PendingNetworkState
+    {
+        public Queue<PlumbingNet> Queue = new Queue<PlumbingNet>();
+        public HashSet<PlumbingNet> Set = new HashSet<PlumbingNet>();
+    }
+
+    public class PushWaterState
+    {
+        // Vars to track transfer state across Prefix to Postfix
+        public PlumbingNet? Instance;
+        public float WaterToDistributeBefore;
+        public TankState? Tank;
+        public HeavyLiquidShuttle? Shuttle;
+
+        // To track what water storages recieved water from our shuttle if we pushed.
+        public Dictionary<CompWaterStorage, float> WaterStorages = new Dictionary<CompWaterStorage, float>();
+
+    }
+}

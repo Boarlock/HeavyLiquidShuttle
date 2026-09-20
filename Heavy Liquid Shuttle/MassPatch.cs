@@ -23,7 +23,9 @@ namespace HeavyLiquidShuttleMod
             HeavyLiquidShuttle shuttle = __instance.parent.TryGetComp<HeavyLiquidShuttle>();
 
             if (shuttle != null)
-                __result += shuttle.WaterStorage;
+            {
+                __result += shuttle.CalculateMassFromTanks();
+            }
         }
     } 
 }
