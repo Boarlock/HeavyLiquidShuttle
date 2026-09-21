@@ -1,4 +1,4 @@
-﻿/*using Rimefeller;
+﻿using Rimefeller;
 using DubsBadHygiene;
 using System.Collections.Generic;
 using Verse;
@@ -7,10 +7,12 @@ namespace HeavyLiquidShuttleMod
 {
     public class ShuttleSearch
     {
-        public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out PlumbingNet plumbingNet, out PipelineNet pipelineNet)
+        public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out HashSet<PlumbingNet> waterNets, out HashSet<PipelineNet> oilNets)
         {
-            plumbingNet = null;
-            pipelineNet = null;
+            waterNets = new HashSet<PlumbingNet>();
+            oilNets = new HashSet<PipelineNet>();
+
+            Log.Message($"[HLS] SEARCH shuttle={shuttle.parent.ThingID}");
 
             if (shuttle == null)
                 return;
@@ -45,88 +47,26 @@ namespace HeavyLiquidShuttleMod
 
                 foreach (Thing thing in map.thingGrid.ThingsAt(adjTile))
                 {
-                    // DBH
-                    if (plumbingNet == null)
-                    {
-                        DubsBadHygiene.CompPipe waterPipe = thing.TryGetComp<DubsBadHygiene.CompPipe>();
+                    DubsBadHygiene.CompPipe waterPipe = thing.TryGetComp<DubsBadHygiene.CompPipe>();
+                    Rimefeller.CompPipe oilPipe = thing.TryGetComp<Rimefeller.CompPipe>();
 
-                        if (waterPipe != null)
-                            plumbingNet = waterPipe.pipeNet;
-                    }
-                    // Rimefeller
-                    if (pipelineNet == null)
+                    if (waterPipe?.pipeNet != null)
                     {
-                        Rimefeller.CompPipe oilPipe = thing.TryGetComp<Rimefeller.CompPipe>();
-
-                        if (oilPipe != null)
-                            pipelineNet = oilPipe.pipeNet;
+                        Log.Message($"[HLS] FOUND WATER cell={adjTile} net={waterPipe.pipeNet.GetHashCode()}");
+                        waterNets.Add(waterPipe.pipeNet);
                     }
 
-                    // We found everything we're looking for.
-                    if (plumbingNet != null && pipelineNet != null)
-                        return;
+                    if (oilPipe?.pipeNet != null)
+                    {
+                        oilNets.Add(oilPipe.pipeNet);
+                        Log.Message($"[HLS] FOUND OIL cell={adjTile} net={oilPipe.pipeNet.GetHashCode()}");
+                        shuttle.OilConnectionAt = adjTile;
+
+                    }
+                    
                 }
             }
-        }
-
-        public static void UnloadWater(Thing shuttle)
-        {
-            if (shuttle == null)
-                return;
-
-            HeavyLiquidShuttle shuttleComp = shuttle.TryGetComp<HeavyLiquidShuttle>();
-
-            if (shuttleComp == null)
-                return;
-
-            if (!DubsBadHygieneIntegration.AdjacentNetworks.TryGetValue(shuttleComp, out var net))
-                return;
-
-            float amountToTransfer = shuttleComp.WaterStorage;
-
-            if (amountToTransfer <= 0f)
-                return;
-
-            float remaining = net.PushWater(amountToTransfer);
-            float transferred = amountToTransfer - remaining;
-
-            if (transferred <= 0f)
-                return;
-
-            shuttleComp.WaterStorage -= transferred;
-
-            MassPatch.NotifyLiquidMassChanged(shuttleComp);
-        }
-
-
-        public static void UnloadCrude(Thing shuttle)
-        {
-            if (shuttle == null)
-                return;
-
-            HeavyLiquidShuttle shuttleComp =
-                shuttle.TryGetComp<HeavyLiquidShuttle>();
-
-            if (shuttleComp == null)
-                return;
-
-            if (!RimefellerIntegration.AdjacentNetworks.TryGetValue(shuttleComp, out var net))
-                return;
-
-            float amountToTransfer = shuttleComp.CrudeStorage;
-
-            if (amountToTransfer <= 0f)
-                return;
-
-            double remaining = net.PushCrude(amountToTransfer);
-            double transferred = amountToTransfer - remaining;
-
-            if (transferred <= 0)
-                return;
-
-            shuttleComp.CrudeStorage -= (float)transferred;
-
-            MassPatch.NotifyLiquidMassChanged(shuttleComp);
+            Log.Message($"[HLS] SEARCH RESULT water={waterNets.Count} oil={oilNets.Count}");
         }
     }
-}*/
+}

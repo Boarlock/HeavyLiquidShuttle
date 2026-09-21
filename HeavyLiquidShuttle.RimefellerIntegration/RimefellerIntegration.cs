@@ -9,15 +9,14 @@ namespace HeavyLiquidShuttleMod
 {
     public static class RimefellerIntegration
     {
-        public static readonly Dictionary<HeavyLiquidShuttle, PipelineNet> AdjacentNetworks = new Dictionary<HeavyLiquidShuttle, PipelineNet>();
-        public static PipelineNet? shuttleCurrentlyPushingTo;
+        public static Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>> AdjacentNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>>();
         public static void Initialize()
         {
             HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
             HeavyLiquidShuttle.TickIntegration += OnTransferTick;
-
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
 
+            Application.focusChanged += OnApplicationFocusChanged;
             HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
 
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.rimefeller");
@@ -26,36 +25,94 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] Rimefeller integration loaded.");
         }
 
+        private static void OnApplicationFocusChanged(bool hasFocus)
+        {
+            if (hasFocus)
+                return;
+
+            Log.Message("[HeavyLiquidShuttle] Application lost focus. Halting transfers.");
+
+            foreach (Map map in Find.Maps)
+            {
+                foreach (Thing thing in map.listerThings.AllThings)
+                {
+
+                    HeavyLiquidShuttle? shuttle = thing.TryGetComp<HeavyLiquidShuttle>();
+
+                    if (shuttle == null)
+                        continue;
+
+                    shuttle.TankA.TransferEnabled = false;
+                    shuttle.TankA.IsTransferringFluid = false;
+                    shuttle.TankA.ReceiveAllowance = 1.0;
+                    shuttle.TankA.Counter = 0;
+
+                    shuttle.TankB.TransferEnabled = false;
+                    shuttle.TankB.IsTransferringFluid = false;
+                    shuttle.TankB.ReceiveAllowance = 1.0;
+                    shuttle.TankB.Counter = 0;
+                }
+            }
+        }
+
         private static void OnShuttleTick(HeavyLiquidShuttle shuttle)
         {
+            HashSet<PipelineNet> newNets = ShuttleOilSearch.CheckCellsAroundShuttle(shuttle);
 
-            PipelineNet? newNet = ShuttleOilSearch.CheckCellsAroundShuttle(shuttle);
-
-            if (newNet == null)
+            if (newNets.Count == 0)
             {
                 AdjacentNetworks.Remove(shuttle);
                 return;
             }
 
-            AdjacentNetworks[shuttle] = newNet;
+            AdjacentNetworks[shuttle] = newNets;
 
             if (shuttle.TankA.Content == TankState.StoredType.Oil)
-                shuttle.TankA.ReceiveAllowance = 1.0;
+            {
+                if (shuttle.TankA.Counter < 2)
+                    shuttle.TankA.Counter++;
 
+                shuttle.TankA.ReceiveAllowance = 1.0;
+            }
             if (shuttle.TankB.Content == TankState.StoredType.Oil)
+            {
+                if (shuttle.TankB.Counter < 2)
+                    shuttle.TankB.Counter++;
+
                 shuttle.TankB.ReceiveAllowance = 1.0;
+            }
         }
 
         private static void OnTransferTick(HeavyLiquidShuttle shuttle)
         {
-            if (!AdjacentNetworks.TryGetValue(shuttle, out PipelineNet net))
+            if (!AdjacentNetworks.TryGetValue(shuttle, out HashSet<PipelineNet> nets))
                 return;
 
-            TransferTank(shuttle, shuttle.TankA, net);
-            TransferTank(shuttle, shuttle.TankB, net);
+            PipelineNet? validNet = null;
+
+            foreach (PipelineNet net in nets)
+            {
+                foreach (CompStorageTank storage in net.OilStorage)
+                {
+                    if (storage.space >= 1f && !storage.DrainTank)
+                    {
+                        validNet = net;
+                        break;
+                    }
+                }
+
+                if (validNet != null)
+                    break;
+            }
+
+            if (validNet == null)
+                return;
+
+            TransferTank(shuttle.TankA, validNet);
+            TransferTank(shuttle.TankB, validNet);
         }
 
-        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PipelineNet net)
+        private static void TransferTank(TankState tank, PipelineNet net)
         {
             if (tank.Content != TankState.StoredType.Oil)
                 return;
@@ -76,6 +133,7 @@ namespace HeavyLiquidShuttleMod
             try
             {
                 double remaining = net.PushCrude(amount);
+
                 double transferred = amount - remaining;
 
                 tank.TankStorage = Mathf.Max(0f, tank.TankStorage - (float)transferred);
@@ -89,7 +147,6 @@ namespace HeavyLiquidShuttleMod
                     tank.TankStorage = 0f;
                     tank.Content = TankState.StoredType.Empty;
                     tank.TransferEnabled = false;
-                    tank.IsContaminated = false;
                 }
             }
         }

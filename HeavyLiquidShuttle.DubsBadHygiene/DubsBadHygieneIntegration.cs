@@ -1,8 +1,6 @@
 ﻿using DubsBadHygiene;
 using HarmonyLib;
 using System.Collections.Generic;
-using System.Reflection;
-using System.Threading.Tasks;
 using UnityEngine;
 using Verse;
 
@@ -11,7 +9,6 @@ namespace HeavyLiquidShuttleMod
     public static class DubsBadHygieneIntegration
     {
         public static Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>> AdjacentNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>>();
-        public static Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>> RecentNetworkActivity = new Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>>();
         public static void Initialize()
         {
             HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
@@ -42,6 +39,7 @@ namespace HeavyLiquidShuttleMod
 
                     if (shuttle == null)
                         continue;
+
                     shuttle.TankA.TransferEnabled = false;
                     shuttle.TankA.IsTransferringFluid = false;
                     shuttle.TankA.ReceiveAllowance = 1.0;
@@ -81,16 +79,6 @@ namespace HeavyLiquidShuttleMod
 
                 shuttle.TankB.ReceiveAllowance = 1.0;
             }
-
-            if (!RecentNetworkActivity.TryGetValue(shuttle, out HashSet<PlumbingNet>? activity))
-            {
-                activity = new HashSet<PlumbingNet>();
-                RecentNetworkActivity[shuttle] = activity;
-            }
-            else
-            {
-                activity.Clear();
-            }
         }
 
         private static void OnTransferTick(HeavyLiquidShuttle shuttle)
@@ -100,43 +88,35 @@ namespace HeavyLiquidShuttleMod
 
             PlumbingNet? validNet = null;
 
-            if (!RecentNetworkActivity.TryGetValue(shuttle, out HashSet<PlumbingNet>? recentActivity))
-            {
-                recentActivity = new HashSet<PlumbingNet>();
-            }
-
             foreach (PlumbingNet net in nets)
             {
-                if (recentActivity.Contains(net))
-                    continue;
+                foreach (CompWaterStorage storage in net.WaterTowers)
+                {
+                    if (storage.space >= 1f && !storage.DrainTank)
+                    {
+                        validNet = net;
+                        break;
+                    }
+                }
 
-                validNet = net;
-                break;
+                if (validNet != null)
+                    break;
             }
 
             if (validNet == null)
                 return;
 
-            Log.Message(
-    $"[HLS DBH] OUTPUT: ValidNet={validNet.GetHashCode()} " +
-    $"Recent={recentActivity.Count}");
-
-            TransferTank(shuttle, shuttle.TankA, validNet);
-            TransferTank(shuttle, shuttle.TankB, validNet);
+            TransferTank(shuttle.TankA, validNet);
+            TransferTank(shuttle.TankB, validNet);
         }
 
-        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PlumbingNet net)
+        private static void TransferTank(TankState tank, PlumbingNet net)
         {
             if (tank.Content != TankState.StoredType.Water)
                 return;
 
             if (tank.TankStorage <= 0f)
                 return;
-
-            Log.Message(
-    $"[HLS DBH] OUTPUT: Tank attempting transfer. " +
-    $"Storage={tank.TankStorage} Amount={Mathf.Min(tank.TankStorage, 1f)} " +
-    $"Net={net.GetHashCode()}");
 
             if (tank.IsTransferringFluid)
                 return;
@@ -154,11 +134,6 @@ namespace HeavyLiquidShuttleMod
                 float transferred = amount - remaining;
 
                 tank.TankStorage = Mathf.Max(0f, tank.TankStorage - transferred);
-
-                Log.Message(
-    $"[HLS DBH] OUTPUT: Requested={amount} " +
-    $"Remaining={remaining} " +
-    $"Transferred={transferred}");
             }
             finally
             {

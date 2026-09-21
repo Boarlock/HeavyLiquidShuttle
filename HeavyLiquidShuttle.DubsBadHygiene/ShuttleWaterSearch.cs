@@ -43,7 +43,7 @@ namespace HeavyLiquidShuttleMod
 
                 foreach (Thing thing in map.thingGrid.ThingsAt(adjTile))
                 {
-                    CompPipe? pipe = thing.TryGetComp<CompPipe>();
+                    CompPipe pipe = thing.TryGetComp<CompPipe>();
 
                     if (pipe == null)
                         continue;

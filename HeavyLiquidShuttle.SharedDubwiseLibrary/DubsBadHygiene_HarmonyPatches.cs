@@ -2,6 +2,7 @@
 using HarmonyLib;
 using System.Collections.Generic;
 using UnityEngine;
+using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -9,14 +10,14 @@ namespace HeavyLiquidShuttleMod
     public static class DubsBadHygiene_HarmonyPatches
 
     {
-        private static readonly Dictionary<HeavyLiquidShuttle, PendingNetworkState>  PendingNetworks = new Dictionary<HeavyLiquidShuttle, PendingNetworkState>();
+        private static readonly Dictionary<HeavyLiquidShuttle, PendingWaterState>  PendingWaterNetworks = new Dictionary<HeavyLiquidShuttle, PendingWaterState>();
 
         private static void EnqueueNetwork(HeavyLiquidShuttle shuttle, PlumbingNet net)
         {
-            if (!PendingNetworks.TryGetValue(shuttle, out PendingNetworkState state))
+            if (!PendingWaterNetworks.TryGetValue(shuttle, out PendingWaterState state))
             {
-                state = new PendingNetworkState();
-                PendingNetworks[shuttle] = state;
+                state = new PendingWaterState();
+                PendingWaterNetworks[shuttle] = state;
             }
 
             if (state.Set.Add(net))
@@ -30,13 +31,14 @@ namespace HeavyLiquidShuttleMod
             // See if our shuttle is connected to this Net.
             HeavyLiquidShuttle? shuttle = null;
 
-            foreach (KeyValuePair<HeavyLiquidShuttle, HashSet<PlumbingNet>> entry in DubsBadHygieneIntegration.AdjacentNetworks)
+            foreach (KeyValuePair<HeavyLiquidShuttle, HashSet<PlumbingNet>> entry in DubwiseSharedIntegration.AdjacentWaterNetworks)
             {
                 foreach (PlumbingNet net in entry.Value)
                 {
                     if (net != __instance)
                         continue;
 
+                    Log.Message($"[HLS] WATER INPUT net={__instance.GetHashCode()}");
                     shuttle = entry.Key;
                     break;
                 }
@@ -50,6 +52,10 @@ namespace HeavyLiquidShuttleMod
             if (tank == null)
                 return;
 
+            Log.Message(
+    $"[HLS] WATER INPUT tank={tank.Content} " +
+    $"storage={tank.TankStorage:F2} allowance={tank.ReceiveAllowance:F2}"
+);
             __state.Instance = __instance;
             __state.Tank = tank;
             __state.Shuttle = shuttle;
@@ -92,7 +98,7 @@ namespace HeavyLiquidShuttleMod
                 return;
             }
 
-            if (PendingNetworks.TryGetValue(__state.Shuttle, out PendingNetworkState state) && state.Queue.Count > 0)
+            if (PendingWaterNetworks.TryGetValue(__state.Shuttle, out PendingWaterState state) && state.Queue.Count > 0)
             {
                 // Network in Queue has become stale.
                 if (__state.Tank.Counter >= 2)
@@ -124,6 +130,10 @@ namespace HeavyLiquidShuttleMod
                 return;
 
             float accepted = Mathf.Min(__result, (float)__state.Tank.ReceiveAllowance, freeCapacity);
+            Log.Message(
+    $"[HLS] WATER ACCEPT net={__state.Instance.GetHashCode()} " +
+    $"accepted={accepted:F2}"
+);
 
             if (accepted <= 0f)
                 return;
@@ -140,7 +150,7 @@ namespace HeavyLiquidShuttleMod
         }
     }
 
-    public class PendingNetworkState
+    public class PendingWaterState
     {
         public Queue<PlumbingNet> Queue = new Queue<PlumbingNet>();
         public HashSet<PlumbingNet> Set = new HashSet<PlumbingNet>();

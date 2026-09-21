@@ -2,20 +2,21 @@
 using Rimefeller;
 using System;
 using System.Collections.Generic;
+using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
     [HarmonyPatch(typeof(PipelineNet), nameof(PipelineNet.PushCrude))]
     public static class Rimefeller_HarmonyPatches
     {
-        private static readonly Dictionary<HeavyLiquidShuttle, PendingNetworkState> PendingNetworks = new Dictionary<HeavyLiquidShuttle, PendingNetworkState>();
+        private static readonly Dictionary<HeavyLiquidShuttle, PendingOilState> PendingOilNetworks = new Dictionary<HeavyLiquidShuttle, PendingOilState>();
 
         private static void EnqueueNetwork(HeavyLiquidShuttle shuttle, PipelineNet net)
         {
-            if (!PendingNetworks.TryGetValue(shuttle, out PendingNetworkState state))
+            if (!PendingOilNetworks.TryGetValue(shuttle, out PendingOilState state))
             {
-                state = new PendingNetworkState();
-                PendingNetworks[shuttle] = state;
+                state = new PendingOilState();
+                PendingOilNetworks[shuttle] = state;
             }
 
             if (state.Set.Add(net))
@@ -30,13 +31,14 @@ namespace HeavyLiquidShuttleMod
             // See if our shuttle is connected to this Net.
             HeavyLiquidShuttle? shuttle = null;
 
-            foreach (KeyValuePair<HeavyLiquidShuttle, HashSet<PipelineNet>> entry in RimefellerIntegration.AdjacentNetworks)
+            foreach (KeyValuePair<HeavyLiquidShuttle, HashSet<PipelineNet>> entry in DubwiseSharedIntegration.AdjacentOilNetworks)
             {
                 foreach (PipelineNet net in entry.Value)
                 {
                     if (net != __instance)
                         continue;
 
+                    Log.Message($"[HLS] OIL INPUT net={__instance.GetHashCode()}");
                     shuttle = entry.Key;
                     break;
                 }
@@ -50,6 +52,10 @@ namespace HeavyLiquidShuttleMod
             if (tank == null)
                 return;
 
+            Log.Message(
+    $"[HLS] OIL INPUT tank={tank.Content} " +
+    $"storage={tank.TankStorage:F2} allowance={tank.ReceiveAllowance:F2}"
+);
             __state.Instance = __instance;
             __state.Tank = tank;
             __state.Shuttle = shuttle;
@@ -73,7 +79,7 @@ namespace HeavyLiquidShuttleMod
                 return;
             }
 
-            if (PendingNetworks.TryGetValue(__state.Shuttle, out PendingNetworkState state) && state.Queue.Count > 0)
+            if (PendingOilNetworks.TryGetValue(__state.Shuttle, out PendingOilState state) && state.Queue.Count > 0)
             {
                 // Network in Queue has become stale.
                 if (__state.Tank.Counter >= 2)
@@ -105,6 +111,10 @@ namespace HeavyLiquidShuttleMod
                 return;
 
             double accepted = Math.Min(__result, Math.Min(freeCapacity, __state.Tank.ReceiveAllowance));
+            Log.Message(
+    $"[HLS] OIL ACCEPT net={__state.Instance.GetHashCode()} " +
+    $"accepted={accepted:F2}"
+);
 
             if (accepted <= 0.0)
                 return;
@@ -121,7 +131,7 @@ namespace HeavyLiquidShuttleMod
         }
     }
 
-    public class PendingNetworkState
+    public class PendingOilState
     {
         public Queue<PipelineNet> Queue = new Queue<PipelineNet>();
         public HashSet<PipelineNet> Set = new HashSet<PipelineNet>();

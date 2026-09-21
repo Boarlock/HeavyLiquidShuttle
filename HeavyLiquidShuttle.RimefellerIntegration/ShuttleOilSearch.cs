@@ -6,16 +6,18 @@ namespace HeavyLiquidShuttleMod
 {
     public class ShuttleOilSearch
     {
-        public static PipelineNet? CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle)
+        public static HashSet<PipelineNet> CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle)
         {
+            HashSet<PipelineNet> nets = new HashSet<PipelineNet>();
+
             if (shuttle == null)
-                return null;
+                return nets;
 
             // Make sure the shuttle is on a non-null worldspace currently.
             Map map = shuttle.parent.Map;
 
             if (map == null)
-                return null;
+                return nets;
 
             HashSet<IntVec3> adjacentTilesSet = new HashSet<IntVec3>();
 
@@ -34,8 +36,6 @@ namespace HeavyLiquidShuttleMod
                 adjacentTilesSet.Remove(shuttleCell);
             }
 
-            PipelineNet net = null!;
-
             foreach (IntVec3 adjTile in adjacentTilesSet)
             {
                 if (!adjTile.InBounds(map))
@@ -48,15 +48,15 @@ namespace HeavyLiquidShuttleMod
                     if (pipe == null)
                         continue;
 
-                    net = pipe.pipeNet;
+                    if (pipe.pipeNet != null)
+                        nets.Add(pipe.pipeNet);
+
                     shuttle.OilConnectionAt = adjTile;
+
                     break;
                 }
-
-                if (net != null)
-                    return net;
             }
-            return null;
+            return nets;
         }
     }
 }
