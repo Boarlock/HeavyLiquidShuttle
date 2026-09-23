@@ -1,4 +1,4 @@
-﻿/*using Rimefeller;
+﻿using Rimefeller;
 using System.Collections.Generic;
 using Verse;
 
@@ -59,4 +59,4 @@ namespace HeavyLiquidShuttleMod
             return nets;
         }
     }
-}*/
+}

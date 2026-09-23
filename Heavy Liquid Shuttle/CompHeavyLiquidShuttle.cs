@@ -56,7 +56,7 @@ namespace HeavyLiquidShuttleMod
 
 
         // Integration events
-        public static event Func<HeavyLiquidShuttle, IEnumerable<Gizmo>>? GizmoIntegration;
+        public static event Func<IEnumerable<Gizmo>>? GizmoIntegration;
         public static event Action? TickIntegration;
         public static event Action<float>? OilSpillIntegration;
 
