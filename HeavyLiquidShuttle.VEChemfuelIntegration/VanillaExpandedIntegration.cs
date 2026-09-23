@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+﻿/*using HarmonyLib;
 using PipeSystem;
 using System.Collections.Generic;
 using System.Reflection;
@@ -7,15 +7,13 @@ using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
-    public static class VanillaExpandedIntegration
+    public class VanillaExpandedIntegration
     {
-        public static readonly Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>> DeepchemNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>>();
-        public static readonly Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>> HelixienNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>>();
-
-        private static readonly Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>> DeepchemPendingNets = new Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>>();
-        private static readonly Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>> HelixienPendingNets = new Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>>();
-
-        private static readonly FieldInfo MarkedForTransferField = typeof(PipeNet).GetField("markedForTransfer", BindingFlags.Instance | BindingFlags.NonPublic);
+        private readonly HeavyLiquidShuttle shuttle;
+        public VanillaExpandedIntegration(HeavyLiquidShuttle shuttle)
+        {
+            this.shuttle = shuttle;
+        }
 
         public static void Initialize()
         {
@@ -25,6 +23,14 @@ namespace HeavyLiquidShuttleMod
 
             Log.Message("[HeavyLiquidShuttle] VE shared integration loaded.");
         }
+
+        public static readonly Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>> DeepchemNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>>();
+        public static readonly Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>> HelixienNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>>();
+
+        private static readonly Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>> DeepchemPendingNets = new Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>>();
+        private static readonly Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>> HelixienPendingNets = new Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>>();
+
+        private static readonly FieldInfo MarkedForTransferField = typeof(PipeNet).GetField("markedForTransfer", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private static List<CompResourceStorage> GetMarkedForTransfer(PipeNet net)
         {
@@ -392,4 +398,4 @@ namespace HeavyLiquidShuttleMod
             }
         }
     }
-}
+}*/

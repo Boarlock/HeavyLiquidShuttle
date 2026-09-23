@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+﻿/*using HarmonyLib;
 using Rimefeller;
 using DubsBadHygiene;
 using System;
@@ -8,11 +8,15 @@ using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
-    public static class DubwiseSharedIntegration
+    public class DubwiseSharedIntegration
     {
-        public static Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>> AdjacentOilNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>>();
-        public static Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>> AdjacentWaterNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>>();
-        public static void Initialize()
+        private readonly HeavyLiquidShuttle shuttle;
+        public DubwiseSharedIntegration(HeavyLiquidShuttle shuttle)
+        {
+            this.shuttle = shuttle;
+        }
+
+        public void Initialize()
         {
             HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
             HeavyLiquidShuttle.TickIntegration += OnTransferTick;
@@ -26,6 +30,9 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] Dubwise shared integration loaded.");
         }
 
+        public static Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>> AdjacentOilNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>>();
+        public static Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>> AdjacentWaterNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>>();
+        
         private static void PrepareTankForReceiving(TankState tank)
         {
             if (tank.Counter < 2)
@@ -319,4 +326,4 @@ namespace HeavyLiquidShuttleMod
             comp.OilSpillGrid.SetAt(shuttle.OilConnectionAt, current + spilledAmount);
         }
     }
-}
+}*/

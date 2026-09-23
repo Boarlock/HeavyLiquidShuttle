@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+﻿/*using HarmonyLib;
 using Rimefeller;
 using System;
 using System.Collections.Generic;
@@ -7,15 +7,16 @@ using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
-    public static class RimefellerIntegration
+    public class RimefellerIntegration
     {
-        public static Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>> AdjacentNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>>();
-        public static void Initialize()
+        private readonly HeavyLiquidShuttle shuttle;
+        public RimefellerIntegration(HeavyLiquidShuttle shuttle)
         {
+            this.shuttle = shuttle;
+
             HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
             HeavyLiquidShuttle.TickIntegration += OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
-
             HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
 
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.rimefeller");
@@ -24,17 +25,14 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] Rimefeller integration loaded.");
         }
 
-        private static void OnShuttleTick(HeavyLiquidShuttle shuttle)
+        public HashSet<PipelineNet> AdjacentNetworks = new HashSet<PipelineNet>();
+
+        private void OnShuttleTick()
         {
-            HashSet<PipelineNet> newNets = ShuttleOilSearch.CheckCellsAroundShuttle(shuttle);
+            AdjacentNetworks = ShuttleOilSearch.CheckCellsAroundShuttle(shuttle);
 
-            if (newNets.Count == 0)
-            {
-                AdjacentNetworks.Remove(shuttle);
+            if (AdjacentNetworks.Count <= 0)
                 return;
-            }
-
-            AdjacentNetworks[shuttle] = newNets;
 
             if (shuttle.TankA.Content == StoredType.Oil)
             {
@@ -52,14 +50,14 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static void OnTransferTick(HeavyLiquidShuttle shuttle)
+        private void OnTransferTick()
         {
-            if (!AdjacentNetworks.TryGetValue(shuttle, out HashSet<PipelineNet> nets))
+            if (AdjacentNetworks.Count <= 0)
                 return;
 
             PipelineNet? validNet = null;
 
-            foreach (PipelineNet net in nets)
+            foreach (PipelineNet net in AdjacentNetworks)
             {
                 foreach (CompStorageTank storage in net.OilStorage)
                 {
@@ -77,16 +75,11 @@ namespace HeavyLiquidShuttleMod
             if (validNet == null)
                 return;
 
-            TransferToTank(shuttle, validNet);
+            TransferTank(shuttle.TankA, validNet);
+            TransferTank(shuttle.TankB, validNet);
         }
 
-        private static void TransferToTank(HeavyLiquidShuttle shuttle, PipelineNet net)
-        {
-            TransferTank(shuttle, shuttle.TankA, net);
-            TransferTank(shuttle, shuttle.TankB, net);
-        }
-
-        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PipelineNet net)
+        private void TransferTank(TankState tank, PipelineNet net)
         {
             if (tank.Content != StoredType.Oil)
                 return;
@@ -125,9 +118,9 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static IEnumerable<Gizmo> AddGizmos(HeavyLiquidShuttle shuttle)
+        private IEnumerable<Gizmo> AddGizmos(HeavyLiquidShuttle shuttle)
         {
-            if (AdjacentNetworks.ContainsKey(shuttle))
+            if (AdjacentNetworks.Count > 0)
             {
                 if (shuttle.TankA.Content == StoredType.Oil && shuttle.TankA.TankStorage > 0f)
                 {
@@ -172,9 +165,8 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        public static void StartOilSpill(HeavyLiquidShuttle shuttle, float spilledAmount)
+        public void StartOilSpill(float spilledAmount)
         {
-
             if (!shuttle.OilConnectionAt.IsValid)
                 return;
 
@@ -185,4 +177,4 @@ namespace HeavyLiquidShuttleMod
             comp.OilSpillGrid.SetAt(shuttle.OilConnectionAt, current + spilledAmount);
         }
     }
-}
+}*/
