@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading.Tasks;
 using UnityEngine;
 using Verse;
@@ -16,21 +17,64 @@ namespace HeavyLiquidShuttleMod
 
     public class HeavyLiquidShuttle : ThingComp
     {
-        // Integration events.
-        public static event Func<HeavyLiquidShuttle, IEnumerable<Gizmo>>? GizmoIntegration;
-        public static event Action<HeavyLiquidShuttle>? TickIntegration;
-        public static event Action<HeavyLiquidShuttle, float>? OilSpillIntegration;
+        public HeavyLiquidShuttle()
+        {
+            bool dbhActive = HeavyLiquidShuttleMod.DubsBadHygieneActive;
+            bool rimefellerActive = HeavyLiquidShuttleMod.RimefellerActive;
+            bool vechemActive = HeavyLiquidShuttleMod.VEChemfuelActive;
+            bool vehelixActive = HeavyLiquidShuttleMod.VEHelixienActive;
 
-        // Tank specific state fields.
+            if (dbhActive && rimefellerActive && LibraryLoaders.DubwiseSharedIntegrationType != null)
+            {
+                sharedIntegration = Activator.CreateInstance(LibraryLoaders.DubwiseSharedIntegrationType, this);
+            }
+            else if (dbhActive && LibraryLoaders.DBHIntegrationType != null)
+            {
+                dbhIntegration = Activator.CreateInstance(LibraryLoaders.DBHIntegrationType, this);
+            }
+            else if (rimefellerActive && LibraryLoaders.RimefellerIntegrationType != null)
+            {
+                rimefellerIntegration = Activator.CreateInstance(LibraryLoaders.RimefellerIntegrationType, this);
+            }
+            
+            if ((vechemActive || vehelixActive) && LibraryLoaders.VESharedIntegrationType != null)
+            {
+                veIntegration = Activator.CreateInstance(LibraryLoaders.VESharedIntegrationType, this);
+            }
+        }
+
+        // Integration instances
+        private readonly object? sharedIntegration;
+        private readonly object? dbhIntegration;
+        private readonly object? rimefellerIntegration;
+        private readonly object? veIntegration;
+
+        public object? SharedIntegration => sharedIntegration;
+        public object? DBHIntegration => dbhIntegration;
+        public object? RimefellerIntegration => rimefellerIntegration;
+        public object? VEIntegration => veIntegration;
+
+
+        // Integration events
+        public static event Func<HeavyLiquidShuttle, IEnumerable<Gizmo>>? GizmoIntegration;
+        public static event Action? TickIntegration;
+        public static event Action<float>? OilSpillIntegration;
+
+
+        // Tank specific state data
         public TankState TankA = new TankState();
         public TankState TankB = new TankState();
 
-        public const float CrudeMassPerLiter = 0.85f;
-        public const float DeepchemMassPerLiter = 1.2f;
-        public const float HelixienMassPerLiter = 0.2f;
+        // toggle for when a Shuttle Tank is actively transferring
+        public void ToggleTransfer(TankState tank)
+        {
+            tank.TransferEnabled = !tank.TransferEnabled;
+        }
 
-        public IntVec3 OilConnectionAt;
+        // Used for placing Oil Spills from Rimefeller
+        public IntVec3 OilConnectionAt {  get; set; }
 
+        // Helper for returning Shuttle Tanks
         public TankState? GetTankForContent(StoredType content)
         {
             if (TankA.Content == content && TankA.TankStorage < TankA.TankCapacity)
@@ -58,13 +102,13 @@ namespace HeavyLiquidShuttleMod
                     totalMass += TankA.TankStorage;
                     break;
                 case StoredType.Oil:
-                    totalMass += TankA.TankStorage * CrudeMassPerLiter;
+                    totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.CrudeMassPerLiter;
                     break;
                 case StoredType.Deepchem:
-                    totalMass += TankA.TankStorage * DeepchemMassPerLiter;
+                    totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.DeepchemMassPerLiter;
                     break;
                 case StoredType.Helixien:
-                    totalMass += TankA.TankStorage * HelixienMassPerLiter;
+                    totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.HelixienMassPerLiter;
                     break;
             }
 
@@ -74,24 +118,20 @@ namespace HeavyLiquidShuttleMod
                     totalMass += TankB.TankStorage;
                     break;
                 case StoredType.Oil:
-                    totalMass += TankB.TankStorage * CrudeMassPerLiter;
+                    totalMass += TankB.TankStorage * HeavyLiquidShuttleManager.CrudeMassPerLiter;
                     break;
                 case StoredType.Deepchem:
-                    totalMass += TankB.TankStorage * DeepchemMassPerLiter;
+                    totalMass += TankB.TankStorage * HeavyLiquidShuttleManager.DeepchemMassPerLiter;
                     break;
                 case StoredType.Helixien:
-                    totalMass += TankB.TankStorage * HelixienMassPerLiter;
+                    totalMass += TankB.TankStorage * HeavyLiquidShuttleManager.HelixienMassPerLiter;
                     break;
             }
 
             return totalMass;
         }
 
-        public void ToggleTransfer(TankState tank)
-        {
-            tank.TransferEnabled = !tank.TransferEnabled;
-        }
-
+        // Gizmo IEnumerable
         public override IEnumerable<Gizmo> CompGetGizmosExtra()
         {
             foreach (Gizmo gizmo in base.CompGetGizmosExtra())
@@ -113,7 +153,7 @@ namespace HeavyLiquidShuttleMod
                         else if (TankA.Content == StoredType.Oil)
                         {
                             float amountToSpill = TankA.TankStorage;
-                            OilSpillIntegration?.Invoke(this, amountToSpill);
+                            OilSpillIntegration?.Invoke(amountToSpill);
                         }
 
                         TankA.Content = StoredType.Empty;
@@ -140,7 +180,7 @@ namespace HeavyLiquidShuttleMod
                         else if (TankB.Content == StoredType.Oil)
                         {
                             float amountToSpill = TankB.TankStorage;
-                            OilSpillIntegration?.Invoke(this, amountToSpill);
+                            OilSpillIntegration?.Invoke(amountToSpill);
                         }
 
                         TankB.Content = StoredType.Empty;
@@ -190,7 +230,7 @@ namespace HeavyLiquidShuttleMod
             if (!parent.IsHashIntervalTick(10))
                 return;
 
-            TickIntegration?.Invoke(this);
+            TickIntegration?.Invoke();
         }
 
         public override void PostExposeData()
@@ -202,28 +242,5 @@ namespace HeavyLiquidShuttleMod
             Scribe_Values.Look(ref TankA.TransferEnabled, "tankATransferEnabled", false);
             Scribe_Values.Look(ref TankB.TransferEnabled, "tankBTransferEnabled", false);
         }
-    }
-
-    public enum StoredType
-    {
-        Empty,
-        Water,
-        Oil,
-        Deepchem,
-        Helixien
-    }
-
-    public class TankState
-    {
-        public float TankCapacity = 1250f;
-        public float TankStorage = 0f;
-        public StoredType Content = StoredType.Empty;
-        public bool IsContaminated = false;
-
-        public int Counter = 0;
-        public int Counter2 = 0;
-        public bool TransferEnabled;
-        public bool IsTransferringFluid;
-        public double ReceiveAllowance = 1.0;
     }
 }
