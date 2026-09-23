@@ -56,6 +56,7 @@ namespace HeavyLiquidShuttleMod
                 }
             }
         }
+
         private static void PrepareTankForReceiving(TankState tank)
         {
             if (tank.Counter < 2)
@@ -67,13 +68,7 @@ namespace HeavyLiquidShuttleMod
 
         private static void OnShuttleTick(HeavyLiquidShuttle shuttle)
         {
-
-            HashSet<PlumbingNet> waterNets;
-            HashSet<PipelineNet> oilNets;
-
-            ShuttleSearch.CheckCellsAroundShuttle(shuttle, out waterNets, out oilNets);
-
-            Log.Message($"[HLS] TICK networks water={waterNets.Count} oil={oilNets.Count}");
+            ShuttleSearch.CheckCellsAroundShuttle(shuttle, out HashSet<PlumbingNet> waterNets, out HashSet<PipelineNet> oilNets);
 
             // Water networks
             if (waterNets.Count == 0)
@@ -84,10 +79,10 @@ namespace HeavyLiquidShuttleMod
             {
                 AdjacentWaterNetworks[shuttle] = waterNets;
 
-                if (shuttle.TankA.Content == TankState.StoredType.Water)
+                if (shuttle.TankA.Content == StoredType.Water)
                     PrepareTankForReceiving(shuttle.TankA);
 
-                if (shuttle.TankB.Content == TankState.StoredType.Water)
+                if (shuttle.TankB.Content == StoredType.Water)
                     PrepareTankForReceiving(shuttle.TankB);
             }
 
@@ -100,16 +95,18 @@ namespace HeavyLiquidShuttleMod
             {
                 AdjacentOilNetworks[shuttle] = oilNets;
 
-                if (shuttle.TankA.Content == TankState.StoredType.Oil)
+                if (shuttle.TankA.Content == StoredType.Oil)
                     PrepareTankForReceiving(shuttle.TankA);
 
-                if (shuttle.TankB.Content == TankState.StoredType.Oil)
+                if (shuttle.TankB.Content == StoredType.Oil)
                     PrepareTankForReceiving(shuttle.TankB);
             }
         }
 
         private static void OnTransferTick(HeavyLiquidShuttle shuttle)
         {
+            StoredType type;
+
             // Water logic
             if (AdjacentWaterNetworks.TryGetValue(shuttle, out HashSet<PlumbingNet> waterNets))
             {
@@ -132,9 +129,10 @@ namespace HeavyLiquidShuttleMod
 
                 if (validWaterNet != null)
                 {
-                    Log.Message($"[HLS] WATER SELECT net={validWaterNet.GetHashCode()}");
-                    TransferToTank(shuttle.TankA, validWaterNet, null);
-                    TransferToTank(shuttle.TankB, validWaterNet, null);
+                    type = StoredType.Water;
+
+                    TransferToTank(shuttle.TankA, validWaterNet, null, type);
+                    TransferToTank(shuttle.TankB, validWaterNet, null, type);
                 }
             }
 
@@ -160,20 +158,16 @@ namespace HeavyLiquidShuttleMod
 
                 if (validOilNet != null)
                 {
-                    Log.Message($"[HLS] OIL SELECT net={validOilNet.GetHashCode()}");
-                    TransferToTank(shuttle.TankA, null, validOilNet);
-                    TransferToTank(shuttle.TankB, null, validOilNet);
+                    type = StoredType.Oil;
+
+                    TransferToTank(shuttle.TankA, null, validOilNet, type);
+                    TransferToTank(shuttle.TankB, null, validOilNet, type);
                 }
             }
         }
 
-        private static void TransferToTank(TankState tank, PlumbingNet? waterNet, PipelineNet? oilNet)
+        private static void TransferToTank(TankState tank, PlumbingNet? waterNet, PipelineNet? oilNet, StoredType type)
         {
-            Log.Message(
-    $"[HLS] TRANSFER content={tank.Content} " +
-    $"storage={tank.TankStorage:F2} enabled={tank.TransferEnabled}"
-);
-
             if (tank.TankStorage <= 0f)
                 return;
 
@@ -183,10 +177,10 @@ namespace HeavyLiquidShuttleMod
             if (!tank.TransferEnabled)
                 return;
 
-            if (waterNet != null && tank.Content != TankState.StoredType.Water)
+            if (waterNet == null && oilNet == null)
                 return;
 
-            if (oilNet != null && tank.Content != TankState.StoredType.Oil)
+            if (tank.Content != type)
                 return;
 
             double amount = Math.Min(tank.TankStorage, 1f);
@@ -200,13 +194,11 @@ namespace HeavyLiquidShuttleMod
 
                 if (waterNet != null)
                 {
-                    Log.Message($"[HLS] PUSH WATER amount={amount:F2}");
                     remaining = waterNet.PushWater((float)amount);
                     transferred = amount - remaining;
                 }
                 else if (oilNet != null)
                 {
-                    Log.Message($"[HLS] PUSH OIL amount={amount:F2}");
                     remaining = oilNet.PushCrude(amount);
                     transferred = amount - remaining;
                 }
@@ -217,11 +209,6 @@ namespace HeavyLiquidShuttleMod
 
                 tank.TankStorage = Mathf.Max(0f, tank.TankStorage - (float)transferred);
 
-                Log.Message(
-    $"[HLS] TRANSFER RESULT remaining={remaining:F2} " +
-    $"transferred={transferred:F2} " +
-    $"storageAfter={tank.TankStorage:F2}"
-);
             }
             finally
             {
@@ -229,11 +216,11 @@ namespace HeavyLiquidShuttleMod
 
                 if (tank.TankStorage <= 0f)
                 {
-                    if (tank.Content == TankState.StoredType.Water)
+                    if (tank.Content == StoredType.Water)
                         tank.IsContaminated = false;
 
                     tank.TankStorage = 0f;
-                    tank.Content = TankState.StoredType.Empty;
+                    tank.Content = StoredType.Empty;
                     tank.TransferEnabled = false;
                 }
             }
@@ -243,7 +230,7 @@ namespace HeavyLiquidShuttleMod
         {
             if (AdjacentWaterNetworks.ContainsKey(shuttle) || AdjacentOilNetworks.ContainsKey(shuttle))
             {
-                if (shuttle.TankA.Content == TankState.StoredType.Water && shuttle.TankA.TankStorage > 0f)
+                if (shuttle.TankA.Content == StoredType.Water && shuttle.TankA.TankStorage > 0f)
                 {
                     yield return new Command_Toggle
                     {
@@ -263,7 +250,7 @@ namespace HeavyLiquidShuttleMod
                         }
                     };
                 }
-                else if (shuttle.TankA.Content == TankState.StoredType.Oil && shuttle.TankA.TankStorage > 0f)
+                else if (shuttle.TankA.Content == StoredType.Oil && shuttle.TankA.TankStorage > 0f)
                 {
                     yield return new Command_Toggle
                     {
@@ -284,7 +271,7 @@ namespace HeavyLiquidShuttleMod
                     };
                 }
 
-                if (shuttle.TankB.Content == TankState.StoredType.Water && shuttle.TankB.TankStorage > 0f)
+                if (shuttle.TankB.Content == StoredType.Water && shuttle.TankB.TankStorage > 0f)
                 {
                     yield return new Command_Toggle
                     {
@@ -304,7 +291,7 @@ namespace HeavyLiquidShuttleMod
                         }
                     };
                 }
-                else if (shuttle.TankB.Content == TankState.StoredType.Oil && shuttle.TankB.TankStorage > 0f)
+                else if (shuttle.TankB.Content == StoredType.Oil && shuttle.TankB.TankStorage > 0f)
                 {
                     yield return new Command_Toggle
                     {

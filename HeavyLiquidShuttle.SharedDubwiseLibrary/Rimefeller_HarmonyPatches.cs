@@ -38,7 +38,6 @@ namespace HeavyLiquidShuttleMod
                     if (net != __instance)
                         continue;
 
-                    Log.Message($"[HLS] OIL INPUT net={__instance.GetHashCode()}");
                     shuttle = entry.Key;
                     break;
                 }
@@ -47,15 +46,11 @@ namespace HeavyLiquidShuttleMod
             if (shuttle == null)
                 return;
 
-            TankState? tank = shuttle.GetTankForContent(TankState.StoredType.Oil);
+            TankState? tank = shuttle.GetTankForContent(StoredType.Oil);
 
             if (tank == null)
                 return;
 
-            Log.Message(
-    $"[HLS] OIL INPUT tank={tank.Content} " +
-    $"storage={tank.TankStorage:F2} allowance={tank.ReceiveAllowance:F2}"
-);
             __state.Instance = __instance;
             __state.Tank = tank;
             __state.Shuttle = shuttle;
@@ -85,8 +80,8 @@ namespace HeavyLiquidShuttleMod
                 if (__state.Tank.Counter >= 2)
                 {
                     PipelineNet staleNetwork = state.Queue.Dequeue();
-
                     state.Set.Remove(staleNetwork);
+                    __state.Tank.Counter = 0;
 
                     return;
                 }
@@ -111,16 +106,12 @@ namespace HeavyLiquidShuttleMod
                 return;
 
             double accepted = Math.Min(__result, Math.Min(freeCapacity, __state.Tank.ReceiveAllowance));
-            Log.Message(
-    $"[HLS] OIL ACCEPT net={__state.Instance.GetHashCode()} " +
-    $"accepted={accepted:F2}"
-);
 
             if (accepted <= 0.0)
                 return;
 
             // Update shuttle's mass and oil storage.
-            __state.Tank.Content = TankState.StoredType.Oil;
+            __state.Tank.Content = StoredType.Oil;
             __state.Tank.TankStorage += (float)accepted;
             __state.Tank.ReceiveAllowance -= accepted;
             __state.Tank.IsContaminated = true;

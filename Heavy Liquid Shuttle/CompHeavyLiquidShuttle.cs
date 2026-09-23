@@ -28,7 +28,7 @@ namespace HeavyLiquidShuttleMod
         public const float CrudeMassPerLiter = 0.85f;
         public IntVec3 OilConnectionAt;
 
-        public TankState? GetTankForContent(TankState.StoredType content)
+        public TankState? GetTankForContent(StoredType content)
         {
             if (TankA.Content == content && TankA.TankStorage < TankA.TankCapacity)
                 return TankA;
@@ -36,21 +36,10 @@ namespace HeavyLiquidShuttleMod
             if (TankB.Content == content && TankB.TankStorage < TankB.TankCapacity)
                 return TankB;
 
-            if (TankA.Content == TankState.StoredType.Empty)
+            if (TankA.Content == StoredType.Empty)
                 return TankA;
 
-            if (TankB.Content == TankState.StoredType.Empty)
-                return TankB;
-
-            return null;
-        }
-
-        public TankState? GetTankForTransfer(TankState.StoredType content)
-        {
-            if (TankA.Content == content && TankA.TankStorage > 0f)
-                return TankA;
-
-            if (TankB.Content == content && TankB.TankStorage > 0f)
+            if (TankB.Content == StoredType.Empty)
                 return TankB;
 
             return null;
@@ -60,7 +49,7 @@ namespace HeavyLiquidShuttleMod
         {
             float totalMass = 0f;
 
-            if (TankA.Content == TankState.StoredType.Water)
+            if (TankA.Content == StoredType.Water)
             {
                 totalMass += TankA.TankStorage;
             }
@@ -69,7 +58,7 @@ namespace HeavyLiquidShuttleMod
                 totalMass += TankA.TankStorage * CrudeMassPerLiter;
             }
 
-            if (TankB.Content == TankState.StoredType.Water)
+            if (TankB.Content == StoredType.Water)
             {
                 totalMass += TankB.TankStorage;
             }
@@ -100,17 +89,17 @@ namespace HeavyLiquidShuttleMod
                     icon = ContentFinder<Texture2D>.Get("DBH/UI/drainOut"),
                     action = () =>
                     {
-                        if (TankA.Content == TankState.StoredType.Water)
+                        if (TankA.Content == StoredType.Water)
                         {
                             TankA.IsContaminated = false;
                         }
-                        else if (TankA.Content == TankState.StoredType.Oil)
+                        else if (TankA.Content == StoredType.Oil)
                         {
                             float amountToSpill = TankA.TankStorage;
                             OilSpillIntegration?.Invoke(this, amountToSpill);
                         }
 
-                        TankA.Content = TankState.StoredType.Empty;
+                        TankA.Content = StoredType.Empty;
                         TankA.TankStorage = 0f;
                         TankA.TransferEnabled = false;
                         TankA.IsTransferringFluid = false;
@@ -127,17 +116,17 @@ namespace HeavyLiquidShuttleMod
                     icon = ContentFinder<Texture2D>.Get("DBH/UI/drainOut"),
                     action = () =>
                     {
-                        if (TankB.Content == TankState.StoredType.Water)
+                        if (TankB.Content == StoredType.Water)
                         {
                             TankB.IsContaminated = false;
                         }
-                        else if (TankB.Content == TankState.StoredType.Oil)
+                        else if (TankB.Content == StoredType.Oil)
                         {
                             float amountToSpill = TankB.TankStorage;
                             OilSpillIntegration?.Invoke(this, amountToSpill);
                         }
 
-                        TankB.Content = TankState.StoredType.Empty;
+                        TankB.Content = StoredType.Empty;
                         TankB.TankStorage = 0f;
                         TankB.TransferEnabled = false;
                         TankB.IsTransferringFluid = false;
@@ -163,12 +152,12 @@ namespace HeavyLiquidShuttleMod
             string tankA = "";
             string tankB = "";
 
-            if (TankA.IsContaminated && TankA.Content != TankState.StoredType.Oil)
+            if (TankA.IsContaminated && TankA.Content != StoredType.Oil)
                 tankA = $"Tank A: {TankA.Content} (Contaminated) |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
             else
                 tankA = $"Tank A: {TankA.Content} |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
 
-            if (TankB.IsContaminated && TankB.Content != TankState.StoredType.Oil)
+            if (TankB.IsContaminated && TankB.Content != StoredType.Oil)
                 tankB = $"Tank B: {TankB.Content} (Contaminated) |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
             else
                 tankB = $"Tank B: {TankB.Content} |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
@@ -191,37 +180,33 @@ namespace HeavyLiquidShuttleMod
         {
             Scribe_Values.Look(ref TankA.TankStorage, "tankAStorage", 0f);
             Scribe_Values.Look(ref TankB.TankStorage, "tankBStorage", 0f);
-            Scribe_Values.Look(ref TankA.Content, "tankAContent", TankState.StoredType.Empty);
-            Scribe_Values.Look(ref TankB.Content, "tankBContent", TankState.StoredType.Empty);
+            Scribe_Values.Look(ref TankA.Content, "tankAContent", StoredType.Empty);
+            Scribe_Values.Look(ref TankB.Content, "tankBContent", StoredType.Empty);
             Scribe_Values.Look(ref TankA.TransferEnabled, "tankATransferEnabled", false);
             Scribe_Values.Look(ref TankB.TransferEnabled, "tankBTransferEnabled", false);
         }
     }
 
+    public enum StoredType
+    {
+        Empty,
+        Water,
+        Oil,
+        Deepchem,
+        Helixien
+    }
+
     public class TankState
     {
-        public enum StoredType
-        {
-            Empty,
-            Water,
-            Oil,
-            Deepchem,
-            Helixien
-        }
-
         public float TankCapacity = 1250f;
         public float TankStorage = 0f;
         public StoredType Content = StoredType.Empty;
         public bool IsContaminated = false;
+
         public int Counter = 0;
-
-        // Persistent player-controlled transfer state.
+        public int Counter2 = 0;
         public bool TransferEnabled;
-
-        // Temporary operation guards.
         public bool IsTransferringFluid;
-
-        // Maximum amount this tank can receive during the current transfer interval.
         public double ReceiveAllowance = 1.0;
     }
 }

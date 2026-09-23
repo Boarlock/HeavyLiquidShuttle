@@ -38,7 +38,6 @@ namespace HeavyLiquidShuttleMod
                     if (net != __instance)
                         continue;
 
-                    Log.Message($"[HLS] WATER INPUT net={__instance.GetHashCode()}");
                     shuttle = entry.Key;
                     break;
                 }
@@ -47,15 +46,11 @@ namespace HeavyLiquidShuttleMod
             if (shuttle == null)
                 return;
 
-            TankState? tank = shuttle.GetTankForContent(TankState.StoredType.Water);
+            TankState? tank = shuttle.GetTankForContent(StoredType.Water);
 
             if (tank == null)
                 return;
 
-            Log.Message(
-    $"[HLS] WATER INPUT tank={tank.Content} " +
-    $"storage={tank.TankStorage:F2} allowance={tank.ReceiveAllowance:F2}"
-);
             __state.Instance = __instance;
             __state.Tank = tank;
             __state.Shuttle = shuttle;
@@ -104,8 +99,8 @@ namespace HeavyLiquidShuttleMod
                 if (__state.Tank.Counter >= 2)
                 {
                     PlumbingNet staleNetwork = state.Queue.Dequeue();
-
                     state.Set.Remove(staleNetwork);
+                    __state.Tank.Counter = 0;
 
                     return;
                 }
@@ -130,16 +125,12 @@ namespace HeavyLiquidShuttleMod
                 return;
 
             float accepted = Mathf.Min(__result, (float)__state.Tank.ReceiveAllowance, freeCapacity);
-            Log.Message(
-    $"[HLS] WATER ACCEPT net={__state.Instance.GetHashCode()} " +
-    $"accepted={accepted:F2}"
-);
 
             if (accepted <= 0f)
                 return;
 
             // Update shuttle's mass and water storage.
-            __state.Tank.Content = TankState.StoredType.Water;
+            __state.Tank.Content = StoredType.Water;
             __state.Tank.TankStorage += accepted;
             __state.Tank.ReceiveAllowance -= accepted;
             __state.Tank.IsContaminated = __state.Instance.IsNetContaminated();

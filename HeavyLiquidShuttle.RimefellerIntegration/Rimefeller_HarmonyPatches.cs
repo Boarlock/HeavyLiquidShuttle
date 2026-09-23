@@ -45,7 +45,7 @@ namespace HeavyLiquidShuttleMod
             if (shuttle == null)
                 return;
 
-            TankState? tank = shuttle.GetTankForContent(TankState.StoredType.Oil);
+            TankState? tank = shuttle.GetTankForContent(StoredType.Oil);
 
             if (tank == null)
                 return;
@@ -79,8 +79,8 @@ namespace HeavyLiquidShuttleMod
                 if (__state.Tank.Counter >= 2)
                 {
                     PipelineNet staleNetwork = state.Queue.Dequeue();
-
                     state.Set.Remove(staleNetwork);
+                    __state.Tank.Counter = 0;
 
                     return;
                 }
@@ -110,7 +110,7 @@ namespace HeavyLiquidShuttleMod
                 return;
 
             // Update shuttle's mass and oil storage.
-            __state.Tank.Content = TankState.StoredType.Oil;
+            __state.Tank.Content = StoredType.Oil;
             __state.Tank.TankStorage += (float)accepted;
             __state.Tank.ReceiveAllowance -= accepted;
             __state.Tank.IsContaminated = true;

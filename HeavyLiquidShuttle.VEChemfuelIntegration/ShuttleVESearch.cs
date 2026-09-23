@@ -1,16 +1,15 @@
-﻿using Rimefeller;
-using DubsBadHygiene;
-using System.Collections.Generic;
+﻿using PipeSystem;
 using Verse;
+using System.Collections.Generic;
 
 namespace HeavyLiquidShuttleMod
 {
-    public class ShuttleSearch
+    public class ShuttleVESearch
     {
-        public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out HashSet<PlumbingNet> waterNets, out HashSet<PipelineNet> oilNets)
+        public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out HashSet<PipeNet> deepchemNets, out HashSet<PipeNet> helixienNets)
         {
-            waterNets = new HashSet<PlumbingNet>();
-            oilNets = new HashSet<PipelineNet>();
+            deepchemNets = new HashSet<PipeNet>();
+            helixienNets = new HashSet<PipeNet>();
 
             if (shuttle == null)
                 return;
@@ -45,21 +44,21 @@ namespace HeavyLiquidShuttleMod
 
                 foreach (Thing thing in map.thingGrid.ThingsAt(adjTile))
                 {
-                    DubsBadHygiene.CompPipe waterPipe = thing.TryGetComp<DubsBadHygiene.CompPipe>();
-                    Rimefeller.CompPipe oilPipe = thing.TryGetComp<Rimefeller.CompPipe>();
+                    CompResource pipe = thing.TryGetComp<CompResource>();
 
-                    if (waterPipe?.pipeNet != null)
+                    if (pipe == null || pipe.PipeNet == null)
+                        continue;
+
+                    if (pipe.Resource.name == "Deepchem")
                     {
-                        waterNets.Add(waterPipe.pipeNet);
+                        deepchemNets.Add(pipe.PipeNet);
+                    }
+                    else if (pipe.Resource.name == "Helixien gas")
+                    {
+                        helixienNets.Add(pipe.PipeNet);
                     }
 
-                    if (oilPipe?.pipeNet != null)
-                    {
-                        oilNets.Add(oilPipe.pipeNet);
-                        shuttle.OilConnectionAt = adjTile;
-
-                    }
-                    
+                    break;
                 }
             }
         }

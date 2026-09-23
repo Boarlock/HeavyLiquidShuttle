@@ -10,32 +10,39 @@ namespace HeavyLiquidShuttleMod
     {
         public static bool DubsBadHygieneActive { get; private set; }
         public static bool RimefellerActive { get; private set; }
+        public static bool VEChemfuelActive { get; private set; }
+        public static bool VEHelixienActive { get; private set; }
 
         public HeavyLiquidShuttleMod(ModContentPack content) : base(content)
         {
             var harmony = new Harmony("b0arl0ck.heavyliquidshuttle");
-
             harmony.PatchAll();
 
             DubsBadHygieneActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Dubwise.DubsBadHygiene");
             RimefellerActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Dubwise.Rimefeller");
 
             if (DubsBadHygieneActive && RimefellerActive)
-                DubsLibraryLoaders.SharedDubLoad();
+                LibraryLoaders.SharedDubLoad();
             else if (DubsBadHygieneActive)
-                DubsLibraryLoaders.DBHLoad();
+                LibraryLoaders.DBHLoad();
             else if (RimefellerActive)
-                DubsLibraryLoaders.RFLoad();
+                LibraryLoaders.RFLoad();
+
+            VEChemfuelActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.VChemfuelE");
+            VEHelixienActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.HelixienGas");
+
+            if (VEChemfuelActive || VEHelixienActive)
+                LibraryLoaders.VELoad();
 
             Log.Message($"[HeavyLiquidShuttle] Initialization completed.");
         }
     }
 
-    public static class DubsLibraryLoaders
+    public static class LibraryLoaders
     {
         public static void DBHLoad()
         {
-            string coreAssemblyPath = typeof(DubsLibraryLoaders).Assembly.Location;
+            string coreAssemblyPath = typeof(LibraryLoaders).Assembly.Location;
             string coreDirectory = Path.GetDirectoryName(coreAssemblyPath);
 
             string integrationPath = Path.Combine(coreDirectory, "..", "--optional", "DubsBadHygiene", "HeavyLiquidShuttle.DubsBadHygiene.dll");
@@ -64,7 +71,7 @@ namespace HeavyLiquidShuttleMod
 
         public static void RFLoad()
         {
-            string coreAssemblyPath = typeof(DubsLibraryLoaders).Assembly.Location;
+            string coreAssemblyPath = typeof(LibraryLoaders).Assembly.Location;
             string coreDirectory = Path.GetDirectoryName(coreAssemblyPath);
 
             string integrationPath = Path.Combine(coreDirectory, "..", "--optional", "Rimefeller", "HeavyLiquidShuttle.Rimefeller.dll");
@@ -93,7 +100,7 @@ namespace HeavyLiquidShuttleMod
 
         public static void SharedDubLoad()
         {
-            string coreAssemblyPath = typeof(DubsLibraryLoaders).Assembly.Location;
+            string coreAssemblyPath = typeof(LibraryLoaders).Assembly.Location;
             string coreDirectory = Path.GetDirectoryName(coreAssemblyPath);
 
             string integrationPath = Path.Combine(coreDirectory, "..", "--optional", "Dubwise", "HeavyLiquidShuttle.SharedDubwiseLibrary.dll");
@@ -117,6 +124,35 @@ namespace HeavyLiquidShuttleMod
             catch (Exception ex)
             {
                 Log.Error("[HeavyLiquidShuttle] Failed to load Dubwise shared integration: " + ex);
+            }
+        }
+
+        public static void VELoad()
+        {
+            string coreAssemblyPath = typeof(LibraryLoaders).Assembly.Location;
+            string coreDirectory = Path.GetDirectoryName(coreAssemblyPath);
+
+            string integrationPath = Path.Combine(coreDirectory, "..", "--optional", "VE", "HeavyLiquidShuttle.VanillaExpandedIntegration.dll");
+            integrationPath = Path.GetFullPath(integrationPath);
+
+            Log.Message("[HeavyLiquidShuttle] Vanilla Chemfuel Expanded or Vanilla Helixien Gas Expanded detected, preparing to load.");
+
+            if (!File.Exists(integrationPath))
+            {
+                Log.Message("[HeavyLiquidShuttle] VE shared integration not found.");
+                return;
+            }
+
+            try
+            {
+                Assembly assembly = Assembly.LoadFrom(integrationPath);
+                Type integrationType = assembly.GetType("HeavyLiquidShuttleMod.VanillaExpandedIntegration");
+                MethodInfo initializeMethod = integrationType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static);
+                initializeMethod.Invoke(null, null);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("[HeavyLiquidShuttle] Failed to load VE shared integration: " + ex);
             }
         }
     }

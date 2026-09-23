@@ -45,7 +45,7 @@ namespace HeavyLiquidShuttleMod
             if (shuttle == null)
                 return;
 
-            TankState? tank = shuttle.GetTankForContent(TankState.StoredType.Water);
+            TankState? tank = shuttle.GetTankForContent(StoredType.Water);
 
             if (tank == null)
                 return;
@@ -98,8 +98,8 @@ namespace HeavyLiquidShuttleMod
                 if (__state.Tank.Counter >= 2)
                 {
                     PlumbingNet staleNetwork = state.Queue.Dequeue();
-
                     state.Set.Remove(staleNetwork);
+                    __state.Tank.Counter = 0;
 
                     return;
                 }
@@ -129,7 +129,7 @@ namespace HeavyLiquidShuttleMod
                 return;
 
             // Update shuttle's mass and water storage.
-            __state.Tank.Content = TankState.StoredType.Water;
+            __state.Tank.Content = StoredType.Water;
             __state.Tank.TankStorage += accepted;
             __state.Tank.ReceiveAllowance -= accepted;
             __state.Tank.IsContaminated = __state.Instance.IsNetContaminated();

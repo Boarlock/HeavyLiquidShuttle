@@ -67,14 +67,14 @@ namespace HeavyLiquidShuttleMod
 
             AdjacentNetworks[shuttle] = newNets;
 
-            if (shuttle.TankA.Content == TankState.StoredType.Oil)
+            if (shuttle.TankA.Content == StoredType.Oil)
             {
                 if (shuttle.TankA.Counter < 2)
                     shuttle.TankA.Counter++;
 
                 shuttle.TankA.ReceiveAllowance = 1.0;
             }
-            if (shuttle.TankB.Content == TankState.StoredType.Oil)
+            if (shuttle.TankB.Content == StoredType.Oil)
             {
                 if (shuttle.TankB.Counter < 2)
                     shuttle.TankB.Counter++;
@@ -114,7 +114,7 @@ namespace HeavyLiquidShuttleMod
 
         private static void TransferTank(TankState tank, PipelineNet net)
         {
-            if (tank.Content != TankState.StoredType.Oil)
+            if (tank.Content != StoredType.Oil)
                 return;
 
             if (tank.TankStorage <= 0f)
@@ -145,7 +145,7 @@ namespace HeavyLiquidShuttleMod
                 if (tank.TankStorage <= 0f)
                 {
                     tank.TankStorage = 0f;
-                    tank.Content = TankState.StoredType.Empty;
+                    tank.Content = StoredType.Empty;
                     tank.TransferEnabled = false;
                 }
             }
@@ -155,7 +155,7 @@ namespace HeavyLiquidShuttleMod
         {
             if (AdjacentNetworks.ContainsKey(shuttle))
             {
-                if (shuttle.TankA.Content == TankState.StoredType.Oil && shuttle.TankA.TankStorage > 0f)
+                if (shuttle.TankA.Content == StoredType.Oil && shuttle.TankA.TankStorage > 0f)
                 {
                     yield return new Command_Toggle
                     {
@@ -175,7 +175,7 @@ namespace HeavyLiquidShuttleMod
                         }
                     };
                 }
-                if (shuttle.TankB.Content == TankState.StoredType.Oil && shuttle.TankB.TankStorage > 0f)
+                if (shuttle.TankB.Content == StoredType.Oil && shuttle.TankB.TankStorage > 0f)
                 {
                     yield return new Command_Toggle
                     {

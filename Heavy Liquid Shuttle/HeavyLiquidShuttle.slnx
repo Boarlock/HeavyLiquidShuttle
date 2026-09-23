@@ -2,5 +2,6 @@
   <Project Path="../HeavyLiquidShuttle.DubsBadHygiene/HeavyLiquidShuttle.DubsBadHygiene.csproj" />
   <Project Path="../HeavyLiquidShuttle.RimefellerIntegration/HeavyLiquidShuttle.Rimefeller.csproj" Id="d7026315-7028-4a2d-b76d-b94d3ab63444" />
   <Project Path="../HeavyLiquidShuttle.SharedDubwiseLibrary/HeavyLiquidShuttle.SharedDubwiseLibrary.csproj" Id="21f85513-5eef-4a65-80c9-71fbcfec172d" />
+  <Project Path="../HeavyLiquidShuttle.VEChemfuelIntegration/HeavyLiquidShuttle.VanillaExpandedIntegration.csproj" Id="58b3f2fa-ffa5-4138-a4c6-fda321e2a50f" />
   <Project Path="HeavyLiquidShuttle.csproj" />
 </Solution>
