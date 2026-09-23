@@ -49,7 +49,10 @@ namespace HeavyLiquidShuttleMod
 
             harmony.Patch(pushWater, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
             harmony.Patch(pushOil, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
+
+            Log.Message("[HeavyLiquidShuttle] Dubwise shared integration loaded.");
         }
+
         // Adjacent and pending water networks
         public HashSet<PlumbingNet> AdjacentWaterNetworks = new HashSet<PlumbingNet>();
         public HashSetQueue<PlumbingNet> PendingWaterNetworks = new HashSetQueue<PlumbingNet>();

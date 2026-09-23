@@ -1,5 +1,4 @@
-﻿/*using HarmonyLib;
-using PipeSystem;
+﻿using PipeSystem;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -13,10 +12,7 @@ namespace HeavyLiquidShuttleMod
         public VanillaExpandedIntegration(HeavyLiquidShuttle shuttle)
         {
             this.shuttle = shuttle;
-        }
 
-        public static void Initialize()
-        {
             HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
             HeavyLiquidShuttle.TickIntegration += OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
@@ -24,51 +20,22 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] VE shared integration loaded.");
         }
 
-        public static readonly Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>> DeepchemNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>>();
-        public static readonly Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>> HelixienNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipeNet>>();
+        public HashSet<PipeNet> DeepchemNetworks = new HashSet<PipeNet>();
+        public HashSet<PipeNet> HelixienNetworks = new HashSet<PipeNet>();
 
-        private static readonly Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>> DeepchemPendingNets = new Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>>();
-        private static readonly Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>> HelixienPendingNets = new Dictionary<HeavyLiquidShuttle, HashSetQueue<PipeNet>>();
+        private HashSetQueue<PipeNet> DeepchemPendingNets = new HashSetQueue<PipeNet>();
+        private HashSetQueue<PipeNet> HelixienPendingNets = new HashSetQueue<PipeNet>();
 
         private static readonly FieldInfo MarkedForTransferField = typeof(PipeNet).GetField("markedForTransfer", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        private static List<CompResourceStorage> GetMarkedForTransfer(PipeNet net)
+        private List<CompResourceStorage> GetMarkedForTransfer(PipeNet net)
         {
             return (List<CompResourceStorage>)MarkedForTransferField.GetValue(net);
         }
 
-        private static void OnShuttleTick(HeavyLiquidShuttle shuttle)
-        {
-
-            ShuttleVESearch.CheckCellsAroundShuttle(shuttle, out HashSet<PipeNet> deepchem, out HashSet<PipeNet> helixien);
-
-            Log.Message(
-    $"[HeavyLiquidShuttle] VE scan: Deepchem={deepchem.Count}, Helixien={helixien.Count}");
-
-            // Deepchem networks
-            if (deepchem.Count == 0)
-            {
-                DeepchemNetworks.Remove(shuttle);
-            }
-            else
-            {
-                DeepchemNetworks[shuttle] = deepchem;
-            }
-
-            // Helixien networks
-            if (helixien.Count == 0)
-            {
-                HelixienNetworks.Remove(shuttle);
-            }
-            else
-            {
-                HelixienNetworks[shuttle] = helixien;
-            }
-            Log.Message(
-    $"[HeavyLiquidShuttle] VE networks stored: Deepchem={DeepchemNetworks.ContainsKey(shuttle)}, Helixien={HelixienNetworks.ContainsKey(shuttle)}");
-        }
-
-        private static void OnTransferTick(HeavyLiquidShuttle shuttle)
+        private void OnShuttleTick() => ShuttleVESearch.CheckCellsAroundShuttle(shuttle, out DeepchemNetworks, out HelixienNetworks);
+        
+        private void OnTransferTick()
         {
             StoredType type;
             PipeNet? validNet = null;
@@ -84,19 +51,13 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] VEF OnTransferTick running.");
 
             // Deepchem logic
-            if (DeepchemNetworks.TryGetValue(shuttle, out HashSet<PipeNet> deepchemnNets))
+            if (DeepchemNetworks.Count > 0)
             {
                 type = StoredType.Deepchem;
 
-                Log.Message(
-        $"[HeavyLiquidShuttle] Deepchem transfer: {deepchemnNets.Count} networks.");
-
-                foreach (PipeNet net in deepchemnNets)
+                foreach (PipeNet net in DeepchemNetworks)
                 {
                     List<CompResourceStorage> sourceStorages = GetMarkedForTransfer(net);
-
-                    Log.Message(
-    $"[HeavyLiquidShuttle] Deepchem net: storages={net.storages.Count}, marked={sourceStorages.Count}");
 
                     // Storages willing to receive.
                     foreach (CompResourceStorage storage in net.storages)
@@ -114,37 +75,28 @@ namespace HeavyLiquidShuttleMod
                     // Storages marked for transfer.
                     foreach (CompResourceStorage storage in sourceStorages)
                     {
-                        Log.Message(
-        $"[HeavyLiquidShuttle] Deepchem source: stored={storage.AmountStored}");
-
                         if (storage.AmountStored > 1f)
                         {
-                            if (!DeepchemPendingNets.TryGetValue(shuttle, out HashSetQueue<PipeNet> pendingNets))
-                            {
-                                pendingNets = new HashSetQueue<PipeNet>();
-                                DeepchemPendingNets[shuttle] = pendingNets;
-                            }
-
-                            pendingNets.Enqueue(net);
+                            DeepchemPendingNets.Enqueue(net);
                             
                             TankState? tank = shuttle.GetTankForContent(StoredType.Deepchem);
 
                             if (tank == null)
                                 break;
 
-                            if (pendingNets.Count > 0 && pendingNets.Peek() == net && !alreadySupplied)
+                            if (DeepchemPendingNets.Count > 0 && DeepchemPendingNets.Peek() == net && !alreadySupplied)
                             {
                                 TransferFromNetwork(tank, net, type, sourceStorages);
 
                                 alreadySupplied = true;
-                                pendingNets.Dequeue();
+                                DeepchemPendingNets.Dequeue();
                                 tank.Counter2 = 0;
                                 break;
                             }
                             else if (tank.Counter2 >= 2)
                             {
                                 // Network in Queue has become stale.
-                                pendingNets.Dequeue();
+                                DeepchemPendingNets.Dequeue();
                                 tank.Counter2 = 0;
                             }
                         }
@@ -162,19 +114,13 @@ namespace HeavyLiquidShuttleMod
             foundValidNet = false;
 
             // Helixien logic
-            if (HelixienNetworks.TryGetValue(shuttle, out HashSet<PipeNet> helixienNets))
+            if (HelixienNetworks.Count > 0)
             {
                 type = StoredType.Helixien;
 
-                Log.Message(
-        $"[HeavyLiquidShuttle] Deepchem transfer: {helixienNets.Count} networks.");
-
-                foreach (PipeNet net in helixienNets)
+                foreach (PipeNet net in HelixienNetworks)
                 {
                     List<CompResourceStorage> sourceStorages = GetMarkedForTransfer(net);
-
-                    Log.Message(
-    $"[HeavyLiquidShuttle] Deepchem net: storages={net.storages.Count}, marked={sourceStorages.Count}");
 
                     // Storages willing to receive.
                     foreach (CompResourceStorage storage in net.storages)
@@ -192,37 +138,28 @@ namespace HeavyLiquidShuttleMod
                     // Storages marked for transfer.
                     foreach (CompResourceStorage storage in sourceStorages)
                     {
-                        Log.Message(
-        $"[HeavyLiquidShuttle] Deepchem source: stored={storage.AmountStored}");
-
                         if (storage.AmountStored > 1f)
                         {
-                            if (!HelixienPendingNets.TryGetValue(shuttle, out HashSetQueue<PipeNet> pendingNets))
-                            {
-                                pendingNets = new HashSetQueue<PipeNet>();
-                                HelixienPendingNets[shuttle] = pendingNets;
-                            }
-
-                            pendingNets.Enqueue(net);
+                            HelixienPendingNets.Enqueue(net);
 
                             TankState? tank = shuttle.GetTankForContent(StoredType.Helixien);
 
                             if (tank == null)
                                 break;
 
-                            if (pendingNets.Count > 0 && pendingNets.Peek() == net && !alreadySupplied)
+                            if (HelixienPendingNets.Count > 0 && HelixienPendingNets.Peek() == net && !alreadySupplied)
                             {
                                 TransferFromNetwork(tank, net, type, sourceStorages);
 
                                 alreadySupplied = true;
-                                pendingNets.Dequeue();
+                                HelixienPendingNets.Dequeue();
                                 tank.Counter2 = 0;
                                 break;
                             }
                             else if (tank.Counter2 >= 2)
                             {
                                 // Network in Queue has become stale.
-                                pendingNets.Dequeue();
+                                HelixienPendingNets.Dequeue();
                                 tank.Counter2 = 0;
                             }
                         }
@@ -237,7 +174,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static void TransferToTank(TankState tank, PipeNet net, StoredType type)
+        private void TransferToTank(TankState tank, PipeNet net, StoredType type)
         {
             if (tank.TankStorage <= 0f)
                 return;
@@ -276,7 +213,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static void TransferFromNetwork(TankState tank, PipeNet net, StoredType type, List<CompResourceStorage> sourceStorages)
+        private void TransferFromNetwork(TankState tank, PipeNet net, StoredType type, List<CompResourceStorage> sourceStorages)
         {
             if (tank.IsTransferringFluid)
                 return;
@@ -310,9 +247,9 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static IEnumerable<Gizmo> AddGizmos(HeavyLiquidShuttle shuttle)
+        private IEnumerable<Gizmo> AddGizmos()
         {
-            if (DeepchemNetworks.ContainsKey(shuttle) || HelixienNetworks.ContainsKey(shuttle))
+            if (DeepchemNetworks.Count > 0 || HelixienNetworks.Count > 0)
             {
                 if (shuttle.TankA.Content == StoredType.Deepchem && shuttle.TankA.TankStorage > 0f)
                 {
@@ -398,4 +335,4 @@ namespace HeavyLiquidShuttleMod
             }
         }
     }
-}*/
+}

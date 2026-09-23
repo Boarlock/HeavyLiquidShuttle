@@ -43,6 +43,8 @@ namespace HeavyLiquidShuttleMod
             MethodInfo postfix = AccessTools.Method(typeof(DubsBadHygieneIntegration), nameof(Postfix));
 
             harmony.Patch(pushWater, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
+
+            Log.Message("[HeavyLiquidShuttle] DubsBadHygiene integration loaded.");
         }
 
         public HashSet<PlumbingNet> AdjacentNetworks = new HashSet<PlumbingNet>();

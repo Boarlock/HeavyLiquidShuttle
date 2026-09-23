@@ -41,6 +41,8 @@ namespace HeavyLiquidShuttleMod
             MethodInfo postfix = AccessTools.Method(typeof(RimefellerIntegration), nameof(Postfix));
 
             harmony.Patch(pushOil, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
+
+            Log.Message("[HeavyLiquidShuttle] Rimefeller integration loaded.");
         }
 
         public HashSet<PipelineNet> AdjacentNetworks = new HashSet<PipelineNet>();
