@@ -16,43 +16,12 @@ namespace HeavyLiquidShuttleMod
             HeavyLiquidShuttle.TickIntegration += OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
 
-            Application.focusChanged += OnApplicationFocusChanged;
             HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
 
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.rimefeller");
             harmony.PatchAll();
 
             Log.Message("[HeavyLiquidShuttle] Rimefeller integration loaded.");
-        }
-
-        private static void OnApplicationFocusChanged(bool hasFocus)
-        {
-            if (hasFocus)
-                return;
-
-            Log.Message("[HeavyLiquidShuttle] Application lost focus. Halting transfers.");
-
-            foreach (Map map in Find.Maps)
-            {
-                foreach (Thing thing in map.listerThings.AllThings)
-                {
-
-                    HeavyLiquidShuttle? shuttle = thing.TryGetComp<HeavyLiquidShuttle>();
-
-                    if (shuttle == null)
-                        continue;
-
-                    shuttle.TankA.TransferEnabled = false;
-                    shuttle.TankA.IsTransferringFluid = false;
-                    shuttle.TankA.ReceiveAllowance = 1.0;
-                    shuttle.TankA.Counter = 0;
-
-                    shuttle.TankB.TransferEnabled = false;
-                    shuttle.TankB.IsTransferringFluid = false;
-                    shuttle.TankB.ReceiveAllowance = 1.0;
-                    shuttle.TankB.Counter = 0;
-                }
-            }
         }
 
         private static void OnShuttleTick(HeavyLiquidShuttle shuttle)
@@ -108,11 +77,16 @@ namespace HeavyLiquidShuttleMod
             if (validNet == null)
                 return;
 
-            TransferTank(shuttle.TankA, validNet);
-            TransferTank(shuttle.TankB, validNet);
+            TransferToTank(shuttle, validNet);
         }
 
-        private static void TransferTank(TankState tank, PipelineNet net)
+        private static void TransferToTank(HeavyLiquidShuttle shuttle, PipelineNet net)
+        {
+            TransferTank(shuttle, shuttle.TankA, net);
+            TransferTank(shuttle, shuttle.TankB, net);
+        }
+
+        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PipelineNet net)
         {
             if (tank.Content != StoredType.Oil)
                 return;
@@ -133,10 +107,10 @@ namespace HeavyLiquidShuttleMod
             try
             {
                 double remaining = net.PushCrude(amount);
-
                 double transferred = amount - remaining;
 
                 tank.TankStorage = Mathf.Max(0f, tank.TankStorage - (float)transferred);
+                MassPatch.NotifyLiquidMassChanged(shuttle);
             }
             finally
             {
@@ -160,7 +134,7 @@ namespace HeavyLiquidShuttleMod
                     yield return new Command_Toggle
                     {
                         defaultLabel = "Discharge Crude",
-                        defaultDesc = "Tank A: Discharge crude oil into the adjacent Rimefeller plumbing network.",
+                        defaultDesc = "Tank A: Discharge into an adjacent crude oil network.",
                         icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadOil"),
                         isActive = () =>
                         {
@@ -180,7 +154,7 @@ namespace HeavyLiquidShuttleMod
                     yield return new Command_Toggle
                     {
                         defaultLabel = "Discharge Crude",
-                        defaultDesc = "Tank B: Discharge crude oil into the adjacent Rimefeller plumbing network.",
+                        defaultDesc = "Tank B: Discharge into an adjacent crude oil network.",
                         icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadOil"),
                         isActive = () =>
                         {

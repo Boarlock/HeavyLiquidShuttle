@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using UnityEngine;
 using System;
 using System.IO;
 using System.Reflection;
@@ -34,7 +35,43 @@ namespace HeavyLiquidShuttleMod
             if (VEChemfuelActive || VEHelixienActive)
                 LibraryLoaders.VELoad();
 
+            Application.focusChanged += HeavyLiquidShuttleManager.OnApplicationFocusChanged;
+
             Log.Message($"[HeavyLiquidShuttle] Initialization completed.");
+        }
+    }
+
+    public class HeavyLiquidShuttleManager
+    {
+        internal static void OnApplicationFocusChanged(bool hasFocus)
+        {
+            if (hasFocus)
+                return;
+
+            Log.Message("[HeavyLiquidShuttle] Application lost focus. Halting transfers.");
+
+            foreach (Map map in Find.Maps)
+            {
+                foreach (Thing thing in map.listerThings.AllThings)
+                {
+                    HeavyLiquidShuttle? shuttle = thing.TryGetComp<HeavyLiquidShuttle>();
+
+                    if (shuttle == null)
+                        continue;
+
+                    shuttle.TankA.TransferEnabled = false;
+                    shuttle.TankA.IsTransferringFluid = false;
+                    shuttle.TankA.ReceiveAllowance = 1.0;
+                    shuttle.TankA.Counter = 0;
+                    shuttle.TankA.Counter2 = 0;
+
+                    shuttle.TankB.TransferEnabled = false;
+                    shuttle.TankB.IsTransferringFluid = false;
+                    shuttle.TankB.ReceiveAllowance = 1.0;
+                    shuttle.TankB.Counter = 0;
+                    shuttle.TankA.Counter2 = 0;
+                }
+            }
         }
     }
 

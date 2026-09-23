@@ -1,5 +1,6 @@
 ﻿using DubsBadHygiene;
 using HarmonyLib;
+using Rimefeller;
 using System.Collections.Generic;
 using UnityEngine;
 using Verse;
@@ -10,18 +11,17 @@ namespace HeavyLiquidShuttleMod
     public static class DubsBadHygiene_HarmonyPatches
 
     {
-        private static readonly Dictionary<HeavyLiquidShuttle, PendingWaterState>  PendingWaterNetworks = new Dictionary<HeavyLiquidShuttle, PendingWaterState>();
+        private static readonly Dictionary<HeavyLiquidShuttle, HashSetQueue<PlumbingNet>>  PendingWaterNetworks = new Dictionary<HeavyLiquidShuttle, HashSetQueue<PlumbingNet>>();
 
         private static void EnqueueNetwork(HeavyLiquidShuttle shuttle, PlumbingNet net)
         {
-            if (!PendingWaterNetworks.TryGetValue(shuttle, out PendingWaterState state))
+            if (!PendingWaterNetworks.TryGetValue(shuttle, out HashSetQueue<PlumbingNet> networks))
             {
-                state = new PendingWaterState();
-                PendingWaterNetworks[shuttle] = state;
+                networks = new HashSetQueue<PlumbingNet>();
+                PendingWaterNetworks[shuttle] = networks;
             }
 
-            if (state.Set.Add(net))
-                state.Queue.Enqueue(net);
+            networks.Enqueue(net);
         }
 
         public static void Prefix(PlumbingNet __instance, out PushWaterState __state)
@@ -93,26 +93,23 @@ namespace HeavyLiquidShuttleMod
                 return;
             }
 
-            if (PendingWaterNetworks.TryGetValue(__state.Shuttle, out PendingWaterState state) && state.Queue.Count > 0)
+            if (PendingWaterNetworks.TryGetValue(__state.Shuttle, out HashSetQueue<PlumbingNet> networks) && networks.Count > 0)
             {
                 // Network in Queue has become stale.
                 if (__state.Tank.Counter >= 2)
                 {
-                    PlumbingNet staleNetwork = state.Queue.Dequeue();
-                    state.Set.Remove(staleNetwork);
+                    networks.Dequeue();
                     __state.Tank.Counter = 0;
 
                     return;
                 }
 
                 // Check current call against next item in the Queue
-                if (state.Queue.Peek() != __state.Instance)
+                if (networks.Peek() != __state.Instance)
                     return;
 
                 // This network is now being served.
-                state.Queue.Dequeue();
-
-                state.Set.Remove(__state.Instance);
+                networks.Dequeue();
             }
 
             //Reset the Queue counter
@@ -139,12 +136,6 @@ namespace HeavyLiquidShuttleMod
 
             __result -= accepted;
         }
-    }
-
-    public class PendingWaterState
-    {
-        public Queue<PlumbingNet> Queue = new Queue<PlumbingNet>();
-        public HashSet<PlumbingNet> Set = new HashSet<PlumbingNet>();
     }
 
     public class PushWaterState

@@ -7,8 +7,7 @@ namespace HeavyLiquidShuttleMod
     [HarmonyPatch(typeof(CompTransporter), "MassUsage", MethodType.Getter)]
     public static class MassPatch
     {
-        private static readonly AccessTools.FieldRef<CompTransporter, bool> MassUsageDirty =
-            AccessTools.FieldRefAccess<CompTransporter, bool>("massUsageDirty");
+        private static readonly AccessTools.FieldRef<CompTransporter, bool> MassUsageDirty = AccessTools.FieldRefAccess<CompTransporter, bool>("massUsageDirty");
 
         public static void NotifyLiquidMassChanged(HeavyLiquidShuttle shuttle)
         {

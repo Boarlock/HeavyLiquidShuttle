@@ -21,43 +21,9 @@ namespace HeavyLiquidShuttleMod
         {
             HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
             HeavyLiquidShuttle.TickIntegration += OnTransferTick;
-
-            Application.focusChanged += OnApplicationFocusChanged;
-
-            Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.vanillaexpanded");
-            harmony.PatchAll();
+            HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
 
             Log.Message("[HeavyLiquidShuttle] VE shared integration loaded.");
-        }
-
-        private static void OnApplicationFocusChanged(bool hasFocus)
-        {
-            if (hasFocus)
-                return;
-
-            Log.Message("[HeavyLiquidShuttle] Application lost focus. Halting transfers.");
-
-            foreach (Map map in Find.Maps)
-            {
-                foreach (Thing thing in map.listerThings.AllThings)
-                {
-
-                    HeavyLiquidShuttle? shuttle = thing.TryGetComp<HeavyLiquidShuttle>();
-
-                    if (shuttle == null)
-                        continue;
-
-                    shuttle.TankA.TransferEnabled = false;
-                    shuttle.TankA.IsTransferringFluid = false;
-                    shuttle.TankA.ReceiveAllowance = 1.0;
-                    shuttle.TankA.Counter2 = 0;
-
-                    shuttle.TankB.TransferEnabled = false;
-                    shuttle.TankB.IsTransferringFluid = false;
-                    shuttle.TankB.ReceiveAllowance = 1.0;
-                    shuttle.TankB.Counter2 = 0;
-                }
-            }
         }
 
         private static List<CompResourceStorage> GetMarkedForTransfer(PipeNet net)
@@ -306,9 +272,6 @@ namespace HeavyLiquidShuttleMod
 
         private static void TransferFromNetwork(TankState tank, PipeNet net, StoredType type, List<CompResourceStorage> sourceStorages)
         {
-            Log.Message(
-        $"[HeavyLiquidShuttle] TransferFromNetwork: type={type}, stored={tank.TankStorage}, content={tank.Content}");
-
             if (tank.IsTransferringFluid)
                 return;
 
@@ -326,9 +289,6 @@ namespace HeavyLiquidShuttleMod
 
             try
             {
-                Log.Message(
-    $"[HeavyLiquidShuttle] Calling DrawAmongStorage: amount={amount}");
-
                 net.DrawAmongStorage(amount, out float drawn, sourceStorages, false);
 
                 if (drawn <= 0f)
@@ -337,12 +297,98 @@ namespace HeavyLiquidShuttleMod
                 tank.Content = type;
                 tank.TankStorage += drawn;
 
-                Log.Message(
-    $"[HeavyLiquidShuttle] DrawAmongStorage returned drawn={drawn}");
             }
             finally
             {
                 tank.IsTransferringFluid = false;
+            }
+        }
+
+        private static IEnumerable<Gizmo> AddGizmos(HeavyLiquidShuttle shuttle)
+        {
+            if (DeepchemNetworks.ContainsKey(shuttle) || HelixienNetworks.ContainsKey(shuttle))
+            {
+                if (shuttle.TankA.Content == StoredType.Deepchem && shuttle.TankA.TankStorage > 0f)
+                {
+                    yield return new Command_Toggle
+                    {
+                        defaultLabel = "Discharge Deepchem",
+                        defaultDesc = "Tank A: Discharge into an adjacent deepchem chemfuel network.",
+                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadDeepchem"),
+                        isActive = () =>
+                        {
+                            return shuttle.TankA.TransferEnabled;
+                        },
+                        toggleAction = () =>
+                        {
+                            if (shuttle.TankA.TankStorage <= 0f)
+                                return;
+
+                            shuttle.ToggleTransfer(shuttle.TankA);
+                        }
+                    };
+                }
+                else if (shuttle.TankA.Content == StoredType.Helixien && shuttle.TankA.TankStorage > 0f)
+                {
+                    yield return new Command_Toggle
+                    {
+                        defaultLabel = "Discharge Helixien",
+                        defaultDesc = "Tank A: Discharge into an adjacent helixien gas network.",
+                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadHelixien"),
+                        isActive = () =>
+                        {
+                            return shuttle.TankA.TransferEnabled;
+                        },
+                        toggleAction = () =>
+                        {
+                            if (shuttle.TankA.TankStorage <= 0f)
+                                return;
+
+                            shuttle.ToggleTransfer(shuttle.TankA);
+                        }
+                    };
+                }
+
+                if (shuttle.TankB.Content == StoredType.Deepchem && shuttle.TankB.TankStorage > 0f)
+                {
+                    yield return new Command_Toggle
+                    {
+                        defaultLabel = "Discharge Deepchem",
+                        defaultDesc = "Tank B: Discharge into an adjacent deepchem chemfuel network.",
+                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadDeepchem"),
+                        isActive = () =>
+                        {
+                            return shuttle.TankB.TransferEnabled;
+                        },
+                        toggleAction = () =>
+                        {
+                            if (shuttle.TankB.TankStorage <= 0f)
+                                return;
+
+                            shuttle.ToggleTransfer(shuttle.TankB);
+                        }
+                    };
+                }
+                else if (shuttle.TankB.Content == StoredType.Helixien && shuttle.TankB.TankStorage > 0f)
+                {
+                    yield return new Command_Toggle
+                    {
+                        defaultLabel = "Discharge Helixien",
+                        defaultDesc = "Tank B: Discharge into an adjacent helixien gas network.",
+                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadHelixien"),
+                        isActive = () =>
+                        {
+                            return shuttle.TankB.TransferEnabled;
+                        },
+                        toggleAction = () =>
+                        {
+                            if (shuttle.TankB.TankStorage <= 0f)
+                                return;
+
+                            shuttle.ToggleTransfer(shuttle.TankB);
+                        }
+                    };
+                }
             }
         }
     }

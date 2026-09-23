@@ -1,4 +1,5 @@
-﻿using HarmonyLib;
+﻿using DubsBadHygiene;
+using HarmonyLib;
 using Rimefeller;
 using System;
 using System.Collections.Generic;
@@ -9,23 +10,21 @@ namespace HeavyLiquidShuttleMod
     [HarmonyPatch(typeof(PipelineNet), nameof(PipelineNet.PushCrude))]
     public static class Rimefeller_HarmonyPatches
     {
-        private static readonly Dictionary<HeavyLiquidShuttle, PendingOilState> PendingOilNetworks = new Dictionary<HeavyLiquidShuttle, PendingOilState>();
+        private static readonly Dictionary<HeavyLiquidShuttle, HashSetQueue<PipelineNet>> PendingOilNetworks = new Dictionary<HeavyLiquidShuttle, HashSetQueue<PipelineNet>>();
 
         private static void EnqueueNetwork(HeavyLiquidShuttle shuttle, PipelineNet net)
         {
-            if (!PendingOilNetworks.TryGetValue(shuttle, out PendingOilState state))
+            if (!PendingOilNetworks.TryGetValue(shuttle, out HashSetQueue<PipelineNet> networks))
             {
-                state = new PendingOilState();
-                PendingOilNetworks[shuttle] = state;
+                networks = new HashSetQueue<PipelineNet>();
+                PendingOilNetworks[shuttle] = networks;
             }
 
-            if (state.Set.Add(net))
-                state.Queue.Enqueue(net);
+            networks.Enqueue(net);
         }
 
         public static void Prefix(PipelineNet __instance, out PushCrudeState __state)
         {
-
             __state = new PushCrudeState();
 
             // See if our shuttle is connected to this Net.
@@ -74,26 +73,23 @@ namespace HeavyLiquidShuttleMod
                 return;
             }
 
-            if (PendingOilNetworks.TryGetValue(__state.Shuttle, out PendingOilState state) && state.Queue.Count > 0)
+            if (PendingOilNetworks.TryGetValue(__state.Shuttle, out HashSetQueue<PipelineNet> networks) && networks.Count > 0)
             {
                 // Network in Queue has become stale.
                 if (__state.Tank.Counter >= 2)
                 {
-                    PipelineNet staleNetwork = state.Queue.Dequeue();
-                    state.Set.Remove(staleNetwork);
+                    networks.Dequeue();
                     __state.Tank.Counter = 0;
 
                     return;
                 }
 
                 // Check current call against next item in the Queue
-                if (state.Queue.Peek() != __state.Instance)
+                if (networks.Peek() != __state.Instance)
                     return;
 
                 // This network is now being served.
-                state.Queue.Dequeue();
-
-                state.Set.Remove(__state.Instance);
+                networks.Dequeue();
             }
 
             //Reset the Queue counter
@@ -120,12 +116,6 @@ namespace HeavyLiquidShuttleMod
 
             __result -= accepted;
         }
-    }
-
-    public class PendingOilState
-    {
-        public Queue<PipelineNet> Queue = new Queue<PipelineNet>();
-        public HashSet<PipelineNet> Set = new HashSet<PipelineNet>();
     }
 
     public class PushCrudeState

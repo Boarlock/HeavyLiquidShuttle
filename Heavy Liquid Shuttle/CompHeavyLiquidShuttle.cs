@@ -26,6 +26,9 @@ namespace HeavyLiquidShuttleMod
         public TankState TankB = new TankState();
 
         public const float CrudeMassPerLiter = 0.85f;
+        public const float DeepchemMassPerLiter = 1.2f;
+        public const float HelixienMassPerLiter = 0.2f;
+
         public IntVec3 OilConnectionAt;
 
         public TankState? GetTankForContent(StoredType content)
@@ -49,22 +52,36 @@ namespace HeavyLiquidShuttleMod
         {
             float totalMass = 0f;
 
-            if (TankA.Content == StoredType.Water)
+            switch (TankA.Content)
             {
-                totalMass += TankA.TankStorage;
-            }
-            else
-            {
-                totalMass += TankA.TankStorage * CrudeMassPerLiter;
+                case StoredType.Water:
+                    totalMass += TankA.TankStorage;
+                    break;
+                case StoredType.Oil:
+                    totalMass += TankA.TankStorage * CrudeMassPerLiter;
+                    break;
+                case StoredType.Deepchem:
+                    totalMass += TankA.TankStorage * DeepchemMassPerLiter;
+                    break;
+                case StoredType.Helixien:
+                    totalMass += TankA.TankStorage * HelixienMassPerLiter;
+                    break;
             }
 
-            if (TankB.Content == StoredType.Water)
+            switch (TankB.Content)
             {
-                totalMass += TankB.TankStorage;
-            }
-            else
-            {
-                totalMass += TankB.TankStorage * CrudeMassPerLiter;
+                case StoredType.Water:
+                    totalMass += TankB.TankStorage;
+                    break;
+                case StoredType.Oil:
+                    totalMass += TankB.TankStorage * CrudeMassPerLiter;
+                    break;
+                case StoredType.Deepchem:
+                    totalMass += TankB.TankStorage * DeepchemMassPerLiter;
+                    break;
+                case StoredType.Helixien:
+                    totalMass += TankB.TankStorage * HelixienMassPerLiter;
+                    break;
             }
 
             return totalMass;
@@ -152,12 +169,12 @@ namespace HeavyLiquidShuttleMod
             string tankA = "";
             string tankB = "";
 
-            if (TankA.IsContaminated && TankA.Content != StoredType.Oil)
+            if (TankA.IsContaminated && TankA.Content == StoredType.Water)
                 tankA = $"Tank A: {TankA.Content} (Contaminated) |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
             else
                 tankA = $"Tank A: {TankA.Content} |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
 
-            if (TankB.IsContaminated && TankB.Content != StoredType.Oil)
+            if (TankB.IsContaminated && TankB.Content == StoredType.Water)
                 tankB = $"Tank B: {TankB.Content} (Contaminated) |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
             else
                 tankB = $"Tank B: {TankB.Content} |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";

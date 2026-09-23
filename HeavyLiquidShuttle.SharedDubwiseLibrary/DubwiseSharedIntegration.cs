@@ -18,43 +18,12 @@ namespace HeavyLiquidShuttleMod
             HeavyLiquidShuttle.TickIntegration += OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
 
-            Application.focusChanged += OnApplicationFocusChanged;
             HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
 
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dubwiseshared");
             harmony.PatchAll();
 
             Log.Message("[HeavyLiquidShuttle] Dubwise shared integration loaded.");
-        }
-
-        private static void OnApplicationFocusChanged(bool hasFocus)
-        {
-            if (hasFocus)
-                return;
-
-            Log.Message("[HeavyLiquidShuttle] Application lost focus. Halting transfers.");
-
-            foreach (Map map in Find.Maps)
-            {
-                foreach (Thing thing in map.listerThings.AllThings)
-                {
-
-                    HeavyLiquidShuttle? shuttle = thing.TryGetComp<HeavyLiquidShuttle>();
-
-                    if (shuttle == null)
-                        continue;
-
-                    shuttle.TankA.TransferEnabled = false;
-                    shuttle.TankA.IsTransferringFluid = false;
-                    shuttle.TankA.ReceiveAllowance = 1.0;
-                    shuttle.TankA.Counter = 0;
-
-                    shuttle.TankB.TransferEnabled = false;
-                    shuttle.TankB.IsTransferringFluid = false;
-                    shuttle.TankB.ReceiveAllowance = 1.0;
-                    shuttle.TankB.Counter = 0;
-                }
-            }
         }
 
         private static void PrepareTankForReceiving(TankState tank)
@@ -105,8 +74,6 @@ namespace HeavyLiquidShuttleMod
 
         private static void OnTransferTick(HeavyLiquidShuttle shuttle)
         {
-            StoredType type;
-
             // Water logic
             if (AdjacentWaterNetworks.TryGetValue(shuttle, out HashSet<PlumbingNet> waterNets))
             {
@@ -129,10 +96,7 @@ namespace HeavyLiquidShuttleMod
 
                 if (validWaterNet != null)
                 {
-                    type = StoredType.Water;
-
-                    TransferToTank(shuttle.TankA, validWaterNet, null, type);
-                    TransferToTank(shuttle.TankB, validWaterNet, null, type);
+                    TransferToTank(shuttle, validWaterNet);
                 }
             }
 
@@ -158,15 +122,24 @@ namespace HeavyLiquidShuttleMod
 
                 if (validOilNet != null)
                 {
-                    type = StoredType.Oil;
-
-                    TransferToTank(shuttle.TankA, null, validOilNet, type);
-                    TransferToTank(shuttle.TankB, null, validOilNet, type);
+                    TransferToTank(shuttle, validOilNet);
                 }
             }
         }
 
-        private static void TransferToTank(TankState tank, PlumbingNet? waterNet, PipelineNet? oilNet, StoredType type)
+        private static void TransferToTank(HeavyLiquidShuttle shuttle, PlumbingNet waterNet)
+        {
+            TransferTank(shuttle, shuttle.TankA, waterNet);
+            TransferTank(shuttle, shuttle.TankB, waterNet);
+        }
+
+        private static void TransferToTank(HeavyLiquidShuttle shuttle, PipelineNet oilNet)
+        {
+            TransferTank(shuttle, shuttle.TankA, oilNet);
+            TransferTank(shuttle, shuttle.TankB, oilNet);
+        }
+
+        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PlumbingNet waterNet)
         {
             if (tank.TankStorage <= 0f)
                 return;
@@ -177,10 +150,47 @@ namespace HeavyLiquidShuttleMod
             if (!tank.TransferEnabled)
                 return;
 
-            if (waterNet == null && oilNet == null)
+            if (tank.Content != StoredType.Water)
                 return;
 
-            if (tank.Content != type)
+            float amount = Mathf.Min(tank.TankStorage, 1f);
+
+            tank.IsTransferringFluid = true;
+
+            try
+            {
+                float remaining = waterNet.PushWater(amount);
+                float transferred = amount - remaining;
+
+                tank.TankStorage = Mathf.Max(0f, tank.TankStorage - transferred);
+                MassPatch.NotifyLiquidMassChanged(shuttle);
+            }
+            finally
+            {
+                tank.IsTransferringFluid = false;
+
+                if (tank.TankStorage <= 0f)
+                {
+                    tank.IsContaminated = false;
+                    tank.TankStorage = 0f;
+                    tank.Content = StoredType.Empty;
+                    tank.TransferEnabled = false;
+                }
+            }
+        }
+
+        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PipelineNet oilNet)
+        {
+            if (tank.TankStorage <= 0f)
+                return;
+
+            if (tank.IsTransferringFluid)
+                return;
+
+            if (!tank.TransferEnabled)
+                return;
+
+            if (tank.Content != StoredType.Oil)
                 return;
 
             double amount = Math.Min(tank.TankStorage, 1f);
@@ -189,26 +199,11 @@ namespace HeavyLiquidShuttleMod
 
             try
             {
-                double remaining;
-                double transferred;
-
-                if (waterNet != null)
-                {
-                    remaining = waterNet.PushWater((float)amount);
-                    transferred = amount - remaining;
-                }
-                else if (oilNet != null)
-                {
-                    remaining = oilNet.PushCrude(amount);
-                    transferred = amount - remaining;
-                }
-                else
-                {
-                    return;
-                }
-
+                double remaining = oilNet.PushCrude(amount);
+                double transferred = amount - remaining;
+                
                 tank.TankStorage = Mathf.Max(0f, tank.TankStorage - (float)transferred);
-
+                MassPatch.NotifyLiquidMassChanged(shuttle);
             }
             finally
             {
@@ -216,9 +211,6 @@ namespace HeavyLiquidShuttleMod
 
                 if (tank.TankStorage <= 0f)
                 {
-                    if (tank.Content == StoredType.Water)
-                        tank.IsContaminated = false;
-
                     tank.TankStorage = 0f;
                     tank.Content = StoredType.Empty;
                     tank.TransferEnabled = false;
@@ -235,7 +227,7 @@ namespace HeavyLiquidShuttleMod
                     yield return new Command_Toggle
                     {
                         defaultLabel = "Discharge Water",
-                        defaultDesc = "Tank A: Discharge water into the adjacent DBH plumbing network.",
+                        defaultDesc = "Tank A: Discharge into an adjacent water network.",
                         icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadWater"),
                         isActive = () =>
                         {
@@ -255,7 +247,7 @@ namespace HeavyLiquidShuttleMod
                     yield return new Command_Toggle
                     {
                         defaultLabel = "Discharge Crude",
-                        defaultDesc = "Tank A: Discharge crude oil into the adjacent Rimefeller plumbing network.",
+                        defaultDesc = "Tank A: Discharge into an adjacent crude oil network.",
                         icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadOil"),
                         isActive = () =>
                         {
@@ -276,7 +268,7 @@ namespace HeavyLiquidShuttleMod
                     yield return new Command_Toggle
                     {
                         defaultLabel = "Discharge Water",
-                        defaultDesc = "Tank B: Discharge water into the adjacent DBH plumbing network.",
+                        defaultDesc = "Tank B: Discharge into an adjacent water network.",
                         icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadWater"),
                         isActive = () =>
                         {
@@ -296,7 +288,7 @@ namespace HeavyLiquidShuttleMod
                     yield return new Command_Toggle
                     {
                         defaultLabel = "Discharge Crude",
-                        defaultDesc = "Tank B: Discharge crude oil into the adjacent Rimefeller plumbing network.",
+                        defaultDesc = "Tank B: Discharge into an adjacent crude oil network.",
                         icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadOil"),
                         isActive = () =>
                         {

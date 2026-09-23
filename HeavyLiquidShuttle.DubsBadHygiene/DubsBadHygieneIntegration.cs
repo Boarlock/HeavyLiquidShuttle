@@ -15,42 +15,10 @@ namespace HeavyLiquidShuttleMod
             HeavyLiquidShuttle.TickIntegration += OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
 
-            Application.focusChanged += OnApplicationFocusChanged;
-
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dbh");
             harmony.PatchAll();
 
             Log.Message("[HeavyLiquidShuttle] Dubs Bad Hygiene integration loaded.");
-        }
-
-        private static void OnApplicationFocusChanged(bool hasFocus)
-        {
-            if (hasFocus)
-                return;
-
-            Log.Message("[HeavyLiquidShuttle] Application lost focus. Halting transfers.");
-
-            foreach (Map map in Find.Maps)
-            {
-                foreach (Thing thing in map.listerThings.AllThings)
-                {
-
-                    HeavyLiquidShuttle? shuttle = thing.TryGetComp<HeavyLiquidShuttle>();
-
-                    if (shuttle == null)
-                        continue;
-
-                    shuttle.TankA.TransferEnabled = false;
-                    shuttle.TankA.IsTransferringFluid = false;
-                    shuttle.TankA.ReceiveAllowance = 1.0;
-                    shuttle.TankA.Counter = 0;
-
-                    shuttle.TankB.TransferEnabled = false;
-                    shuttle.TankB.IsTransferringFluid = false;
-                    shuttle.TankB.ReceiveAllowance = 1.0;
-                    shuttle.TankB.Counter = 0;
-                }
-            }
         }
 
         private static void OnShuttleTick(HeavyLiquidShuttle shuttle)
@@ -106,11 +74,16 @@ namespace HeavyLiquidShuttleMod
             if (validNet == null)
                 return;
 
-            TransferTank(shuttle.TankA, validNet);
-            TransferTank(shuttle.TankB, validNet);
+            TransferToTank(shuttle, validNet);
         }
 
-        private static void TransferTank(TankState tank, PlumbingNet net)
+        private static void TransferToTank(HeavyLiquidShuttle shuttle, PlumbingNet net)
+        {
+            TransferTank(shuttle, shuttle.TankA, net);
+            TransferTank(shuttle, shuttle.TankB, net);
+        }
+
+        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PlumbingNet net)
         {
             if (tank.Content != StoredType.Water)
                 return;
@@ -134,6 +107,7 @@ namespace HeavyLiquidShuttleMod
                 float transferred = amount - remaining;
 
                 tank.TankStorage = Mathf.Max(0f, tank.TankStorage - transferred);
+                MassPatch.NotifyLiquidMassChanged(shuttle);
             }
             finally
             {
@@ -158,7 +132,7 @@ namespace HeavyLiquidShuttleMod
                     yield return new Command_Toggle
                     {
                         defaultLabel = "Discharge Water",
-                        defaultDesc = "Tank A: Discharge water into the adjacent DBH plumbing network.",
+                        defaultDesc = "Tank A: Discharge into an adjacent water network.",
                         icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadWater"),
                         isActive = () =>
                         {
@@ -178,7 +152,7 @@ namespace HeavyLiquidShuttleMod
                     yield return new Command_Toggle
                     {
                         defaultLabel = "Discharge Water",
-                        defaultDesc = "Tank B: Discharge water into the adjacent DBH plumbing network.",
+                        defaultDesc = "Tank B: Discharge into an adjacent water network.",
                         icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadWater"),
                         isActive = () =>
                         {
