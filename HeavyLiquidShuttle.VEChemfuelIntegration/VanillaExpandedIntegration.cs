@@ -18,7 +18,7 @@ namespace HeavyLiquidShuttleMod
 
             HeavyLiquidShuttleGameComponent.TickIntegration += OnShuttleTick;
             HeavyLiquidShuttleGameComponent.TickIntegration += OnTransferTick;
-            HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
+            shuttle.GizmoIntegration += AddGizmos;
 
             Log.Message("[HeavyLiquidShuttle] VE shared integration loaded.");
         }
@@ -32,7 +32,7 @@ namespace HeavyLiquidShuttleMod
 
             HeavyLiquidShuttleGameComponent.TickIntegration -= OnShuttleTick;
             HeavyLiquidShuttleGameComponent.TickIntegration -= OnTransferTick;
-            HeavyLiquidShuttle.GizmoIntegration -= AddGizmos;
+            shuttle.GizmoIntegration -= AddGizmos;
 
             cleanedUp = true;
         }

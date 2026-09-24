@@ -36,8 +36,8 @@ namespace HeavyLiquidShuttleMod
 
             HeavyLiquidShuttleGameComponent.TickIntegration += OnShuttleTick;
             HeavyLiquidShuttleGameComponent.TickIntegration += OnTransferTick;
-            HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
-            HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
+            shuttle.OilSpillIntegration += StartOilSpill;
+            shuttle.GizmoIntegration += AddGizmos;
         }
 
         // Static constructor for all DBH instacnes to patch the relevant Rimefeller method
@@ -63,8 +63,8 @@ namespace HeavyLiquidShuttleMod
 
             HeavyLiquidShuttleGameComponent.TickIntegration -= OnShuttleTick;
             HeavyLiquidShuttleGameComponent.TickIntegration -= OnTransferTick;
-            HeavyLiquidShuttle.GizmoIntegration -= AddGizmos;
-            HeavyLiquidShuttle.OilSpillIntegration -= StartOilSpill;
+            shuttle.OilSpillIntegration -= StartOilSpill;
+            shuttle.GizmoIntegration -= AddGizmos;
 
             Instances.Remove(this);
 

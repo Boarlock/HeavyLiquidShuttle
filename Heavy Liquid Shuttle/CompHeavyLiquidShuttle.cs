@@ -67,8 +67,8 @@ namespace HeavyLiquidShuttleMod
 
 
         // Integration events
-        public static event Func<IEnumerable<Gizmo>>? GizmoIntegration;
-        public static event Action<float>? OilSpillIntegration;
+        public event Func<IEnumerable<Gizmo>>? GizmoIntegration;
+        public event Action<float>? OilSpillIntegration;
 
 
         // Tank specific state data
@@ -208,13 +208,8 @@ namespace HeavyLiquidShuttleMod
 
             if (GizmoIntegration != null)
             {
-                foreach (Delegate subscriber in GizmoIntegration.GetInvocationList())
-                {
-                    Func<IEnumerable<Gizmo>> integration = (Func<IEnumerable<Gizmo>>)subscriber;
-
-                    foreach (Gizmo gizmo in integration())
-                        yield return gizmo;
-                }
+                foreach (Gizmo gizmo in GizmoIntegration.Invoke())
+                    yield return gizmo;
             }
         }
 
