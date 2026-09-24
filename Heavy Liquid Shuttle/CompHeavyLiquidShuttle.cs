@@ -68,7 +68,6 @@ namespace HeavyLiquidShuttleMod
 
         // Integration events
         public static event Func<IEnumerable<Gizmo>>? GizmoIntegration;
-        public static event Action? TickIntegration;
         public static event Action<float>? OilSpillIntegration;
 
 
@@ -236,20 +235,6 @@ namespace HeavyLiquidShuttleMod
                 tankB = $"Tank B: {TankB.Content} |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
 
             return tankA + tankB;
-        }
-
-        // All integration instances are registered with TickIntegration event, this calls each every 10 Ticks if the shuttle is not destroyed
-        public override void CompTick()
-        {
-            base.CompTick();
-
-            if (!parent.IsHashIntervalTick(10))
-                return;
-
-            if (this.parent.Destroyed)
-                ShuttleDestroyedCleanup(this);
-
-            TickIntegration?.Invoke();
         }
 
         public override void PostExposeData()

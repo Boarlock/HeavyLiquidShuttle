@@ -16,8 +16,8 @@ namespace HeavyLiquidShuttleMod
         {
             this.shuttle = shuttle;
 
-            HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
-            HeavyLiquidShuttle.TickIntegration += OnTransferTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
 
             Log.Message("[HeavyLiquidShuttle] VE shared integration loaded.");
@@ -30,8 +30,8 @@ namespace HeavyLiquidShuttleMod
             if (cleanedUp)
                 return;
 
-            HeavyLiquidShuttle.TickIntegration -= OnShuttleTick;
-            HeavyLiquidShuttle.TickIntegration -= OnTransferTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration -= AddGizmos;
 
             cleanedUp = true;

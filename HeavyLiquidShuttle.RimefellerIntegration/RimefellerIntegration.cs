@@ -34,8 +34,8 @@ namespace HeavyLiquidShuttleMod
 
             Instances.Add(this);
 
-            HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
-            HeavyLiquidShuttle.TickIntegration += OnTransferTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
             HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
         }
@@ -61,8 +61,8 @@ namespace HeavyLiquidShuttleMod
             if (cleanedUp)
                 return;
 
-            HeavyLiquidShuttle.TickIntegration -= OnShuttleTick;
-            HeavyLiquidShuttle.TickIntegration -= OnTransferTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration -= AddGizmos;
             HeavyLiquidShuttle.OilSpillIntegration -= StartOilSpill;
 

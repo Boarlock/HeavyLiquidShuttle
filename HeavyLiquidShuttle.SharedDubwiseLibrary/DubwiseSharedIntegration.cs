@@ -37,8 +37,8 @@ namespace HeavyLiquidShuttleMod
 
             Instances.Add(this);
 
-            HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
-            HeavyLiquidShuttle.TickIntegration += OnTransferTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
             HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
         }
@@ -48,13 +48,18 @@ namespace HeavyLiquidShuttleMod
         {
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dubwiseshared");
 
+            // Method target for PushWater and PushCrude
             MethodInfo pushWater = AccessTools.Method(typeof(PlumbingNet), nameof(PlumbingNet.PushWater));
             MethodInfo pushOil = AccessTools.Method(typeof(PipelineNet), nameof(PipelineNet.PushCrude));
-            MethodInfo prefix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(Prefix));
-            MethodInfo postfix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(Postfix));
 
-            harmony.Patch(pushWater, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
-            harmony.Patch(pushOil, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
+            // Seperate Prefix and Postfix identifiers for both PushWater and PushCrude
+            MethodInfo waterPrefix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(WaterPrefix));
+            MethodInfo waterPostfix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(WaterPostfix));
+            MethodInfo oilPrefix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(OilPrefix));
+            MethodInfo oilPostfix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(OilPostfix));
+
+            harmony.Patch(pushWater, prefix: new HarmonyMethod(waterPrefix), postfix: new HarmonyMethod(waterPostfix));
+            harmony.Patch(pushOil, prefix: new HarmonyMethod(oilPrefix), postfix: new HarmonyMethod(oilPostfix));
 
             Log.Message("[HeavyLiquidShuttle] Dubwise shared integration loaded.");
         }
@@ -66,8 +71,8 @@ namespace HeavyLiquidShuttleMod
             if (cleanedUp)
                 return;
 
-            HeavyLiquidShuttle.TickIntegration -= OnShuttleTick;
-            HeavyLiquidShuttle.TickIntegration -= OnTransferTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnTransferTick;
             HeavyLiquidShuttle.GizmoIntegration -= AddGizmos;
             HeavyLiquidShuttle.OilSpillIntegration -= StartOilSpill;
 
@@ -82,8 +87,7 @@ namespace HeavyLiquidShuttleMod
         public HashSet<PipelineNet> AdjacentOilNetworks = new HashSet<PipelineNet>();
         public HashSetQueue<PipelineNet> PendingOilNetworks = new HashSetQueue<PipelineNet>();
 
-        // Pre- and Postfixes for Water Networks
-        public static void Prefix(PlumbingNet __instance, out PushPatchstate __state)
+        public static void WaterPrefix(PlumbingNet __instance, out PushPatchstate __state)
         {
             __state = new PushPatchstate();
 
@@ -117,7 +121,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        public static void Postfix(PushPatchstate __state, ref float __result)
+        public static void WaterPostfix(PushPatchstate __state, ref float __result)
         {
             // This PushWater call was not associated with one of our shuttles.
             if (__state.WaterInstance == null || __state.Tank == null || __state.Shuttle == null || __state.Integration == null)
@@ -194,8 +198,7 @@ namespace HeavyLiquidShuttleMod
             __result -= accepted;
         }
 
-        // Pre- and Postfixes for Oil Networks
-        public static void Prefix(PipelineNet __instance, out PushPatchstate __state)
+        public static void OilPrefix(PipelineNet __instance, out PushPatchstate __state)
         {
             __state = new PushPatchstate();
 
@@ -224,7 +227,7 @@ namespace HeavyLiquidShuttleMod
             __state.Integration = integration;
         }
 
-        public static void Postfix(PushPatchstate __state, ref double __result)
+        public static void OilPostfix(PushPatchstate __state, ref double __result)
         {
             // This PushCrude call was not associated with one of our shuttles.
             if (__state.OilInstance == null || __state.Tank == null || __state.Shuttle == null || __state.Integration == null)
