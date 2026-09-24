@@ -17,7 +17,7 @@ namespace HeavyLiquidShuttleMod
                 _queue.Enqueue(item);
                 return true;
             }
-            return false; // Item already exists in the queue
+            return false; 
         }
 
         // Remove and return the oldest item
@@ -29,10 +29,13 @@ namespace HeavyLiquidShuttleMod
             }
 
             T item = _queue.Dequeue();
-            _set.Remove(item); // Keep the hash set synchronized
+
+            // Keep the hash set synchronized
+            _set.Remove(item); 
             return item;
         }
 
+        // Check the item at the top of the Queue without removing it
         public T Peek()
         {
             if (_queue.Count == 0)

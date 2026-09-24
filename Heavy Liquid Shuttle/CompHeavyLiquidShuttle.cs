@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
-using System.Threading.Tasks;
+using RimWorld;
 using UnityEngine;
 using Verse;
 
@@ -17,7 +16,20 @@ namespace HeavyLiquidShuttleMod
 
     public class HeavyLiquidShuttle : ThingComp
     {
-        public HeavyLiquidShuttle()
+        private bool initialized = false;
+        private bool cleanedUp = false;
+
+        public override void PostSpawnSetup(bool respawningAfterLoad)
+        {
+            base.PostSpawnSetup(respawningAfterLoad);
+
+            if (!initialized)
+            {
+                CreateIntegrations();
+            }
+        }
+
+        private void CreateIntegrations()
         {
             bool dbhActive = HeavyLiquidShuttleMod.DubsBadHygieneActive;
             bool rimefellerActive = HeavyLiquidShuttleMod.RimefellerActive;
@@ -36,23 +48,22 @@ namespace HeavyLiquidShuttleMod
             {
                 rimefellerIntegration = Activator.CreateInstance(LibraryLoaders.RimefellerIntegrationType, this);
             }
-            
+
             if ((vechemActive || vehelixActive) && LibraryLoaders.VESharedIntegrationType != null)
             {
                 veIntegration = Activator.CreateInstance(LibraryLoaders.VESharedIntegrationType, this);
             }
+
+            initialized = true;
         }
 
-        // Integration instances
-        private readonly object? sharedIntegration;
-        private readonly object? dbhIntegration;
-        private readonly object? rimefellerIntegration;
-        private readonly object? veIntegration;
+        private void ShuttleDestroyedCleanup(HeavyLiquidShuttle shuttle) => shuttle.cleanedUp = true;
 
-        public object? SharedIntegration => sharedIntegration;
-        public object? DBHIntegration => dbhIntegration;
-        public object? RimefellerIntegration => rimefellerIntegration;
-        public object? VEIntegration => veIntegration;
+        // Integration instances
+        internal object? sharedIntegration;
+        internal object? dbhIntegration;
+        internal object? rimefellerIntegration;
+        internal object? veIntegration;
 
 
         // Integration events
@@ -131,9 +142,13 @@ namespace HeavyLiquidShuttleMod
             return totalMass;
         }
 
-        // Gizmo IEnumerable
+        // Gizmos for emptying both tanks, in the case of emptying an oil tank, it calls registered methods 
+        // of OilSpillIntegration in RimefellerIntegration and DubwiseSharedIntegraation when present
         public override IEnumerable<Gizmo> CompGetGizmosExtra()
         {
+            if (cleanedUp)
+                yield break;
+
             foreach (Gizmo gizmo in base.CompGetGizmosExtra())
                 yield return gizmo;
 
@@ -196,14 +211,15 @@ namespace HeavyLiquidShuttleMod
             {
                 foreach (Delegate subscriber in GizmoIntegration.GetInvocationList())
                 {
-                    Func<HeavyLiquidShuttle, IEnumerable<Gizmo>> integration = (Func<HeavyLiquidShuttle, IEnumerable<Gizmo>>)subscriber;
+                    Func<IEnumerable<Gizmo>> integration = (Func<IEnumerable<Gizmo>>)subscriber;
 
-                    foreach (Gizmo gizmo in integration(this))
+                    foreach (Gizmo gizmo in integration())
                         yield return gizmo;
                 }
             }
         }
 
+        // Displays tank contents
         public override string CompInspectStringExtra()
         {
             string tankA = "";
@@ -220,15 +236,18 @@ namespace HeavyLiquidShuttleMod
                 tankB = $"Tank B: {TankB.Content} |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
 
             return tankA + tankB;
-
         }
 
+        // All integration instances are registered with TickIntegration event, this calls each every 10 Ticks if the shuttle is not destroyed
         public override void CompTick()
         {
             base.CompTick();
 
             if (!parent.IsHashIntervalTick(10))
                 return;
+
+            if (this.parent.Destroyed)
+                ShuttleDestroyedCleanup(this);
 
             TickIntegration?.Invoke();
         }

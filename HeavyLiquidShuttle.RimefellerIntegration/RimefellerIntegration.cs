@@ -10,16 +10,24 @@ namespace HeavyLiquidShuttleMod
 {
     public class PushCrudeState
     {
+        // Vars to track transfer state across Prefix to Postfix
         public PipelineNet? Instance;
         public TankState? Tank;
         public HeavyLiquidShuttle? Shuttle;
+
+        // To track what water storages recieved water from our shuttle if we pushed.
         public RimefellerIntegration? Integration;
     }
 
     public class RimefellerIntegration
     {
+        // List of instances of all DBH Integrations
         private static readonly HashSet<RimefellerIntegration> Instances = new HashSet<RimefellerIntegration>();
+
+        // shuttle specific to this instance of DBH Integration
         private readonly HeavyLiquidShuttle shuttle;
+
+        // Constructor that registers tick events and Gizmo function from CompHeavyLiquidShuttle
         public RimefellerIntegration(HeavyLiquidShuttle shuttle)
         {
             this.shuttle = shuttle;
@@ -32,6 +40,7 @@ namespace HeavyLiquidShuttleMod
             HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
         }
 
+        // Static constructor for all DBH instacnes to patch the relevant Rimefeller method
         static RimefellerIntegration()
         {
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.rimefeller");
@@ -45,8 +54,26 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] Rimefeller integration loaded.");
         }
 
-        public HashSet<PipelineNet> AdjacentNetworks = new HashSet<PipelineNet>();
-        public HashSetQueue<PipelineNet> PendingNetworks = new HashSetQueue<PipelineNet>();
+        // Cleanup method when the Shuttle is destroyed to let all subscribers of the Tick events to unsubscribe themselves
+        private bool cleanedUp;
+        private void Cleanup()
+        {
+            if (cleanedUp)
+                return;
+
+            HeavyLiquidShuttle.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttle.TickIntegration -= OnTransferTick;
+            HeavyLiquidShuttle.GizmoIntegration -= AddGizmos;
+            HeavyLiquidShuttle.OilSpillIntegration -= StartOilSpill;
+
+            Instances.Remove(this);
+
+            cleanedUp = true;
+        }
+
+        // HashSet for all adjacent network next to the shuttle and HashSetQueue for networks waiting to give content to the Shuttle
+        private HashSet<PipelineNet> AdjacentNetworks = new HashSet<PipelineNet>();
+        private HashSetQueue<PipelineNet> PendingNetworks = new HashSetQueue<PipelineNet>();
 
         public static void Prefix(PipelineNet __instance, out PushCrudeState __state)
         {
@@ -140,8 +167,15 @@ namespace HeavyLiquidShuttleMod
             __result -= accepted;
         }
 
+        // Prepare the Tanks for another receiving cycle
         private void OnShuttleTick()
         {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
             AdjacentNetworks = ShuttleOilSearch.CheckCellsAroundShuttle(shuttle);
 
             if (AdjacentNetworks.Count <= 0)
@@ -163,8 +197,15 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Method to find a "Valid Net", a network that's connected and isn't currently pushing to the Shuttle
         private void OnTransferTick()
         {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
             if (AdjacentNetworks.Count <= 0)
                 return;
 
@@ -192,6 +233,7 @@ namespace HeavyLiquidShuttleMod
             TransferTank(shuttle.TankB, validNet);
         }
 
+        // Method to actually perform the transfer and validate the transfer request
         private void TransferTank(TankState tank, PipelineNet net)
         {
             if (tank.Content != StoredType.Oil)
@@ -231,6 +273,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Gizmos for enabling transfer of oil from Shuttle Tanks
         private IEnumerable<Gizmo> AddGizmos()
         {
             if (AdjacentNetworks.Count > 0)
@@ -278,7 +321,8 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        public void StartOilSpill(float spilledAmount)
+        // Small helper that starts Rimefeller's oil spill mechanic
+        private void StartOilSpill(float spilledAmount)
         {
             if (!shuttle.OilConnectionAt.IsValid)
                 return;

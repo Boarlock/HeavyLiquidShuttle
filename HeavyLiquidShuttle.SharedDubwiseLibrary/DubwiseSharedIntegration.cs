@@ -24,8 +24,13 @@ namespace HeavyLiquidShuttleMod
 
     public class DubwiseSharedIntegration
     {
+        // List of instances of all DBH Integrations
         private static readonly HashSet<DubwiseSharedIntegration> Instances = new HashSet<DubwiseSharedIntegration>();
+
+        // shuttle specific to this instance of DBH Integration
         private readonly HeavyLiquidShuttle shuttle;
+
+        // Constructor that registers tick events and Gizmo function from CompHeavyLiquidShuttle
         public DubwiseSharedIntegration(HeavyLiquidShuttle shuttle)
         {
             this.shuttle = shuttle;
@@ -38,6 +43,7 @@ namespace HeavyLiquidShuttleMod
             HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
         }
 
+        // Static constructor for all DBH instacnes to patch the relevant DBH, and Rimefeller method
         static DubwiseSharedIntegration()
         {
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dubwiseshared");
@@ -53,11 +59,26 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] Dubwise shared integration loaded.");
         }
 
-        // Adjacent and pending water networks
+        // Cleanup method when the Shuttle is destroyed to let all subscribers of the Tick events to unsubscribe themselves
+        private bool cleanedUp;
+        private void Cleanup()
+        {
+            if (cleanedUp)
+                return;
+
+            HeavyLiquidShuttle.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttle.TickIntegration -= OnTransferTick;
+            HeavyLiquidShuttle.GizmoIntegration -= AddGizmos;
+            HeavyLiquidShuttle.OilSpillIntegration -= StartOilSpill;
+
+            Instances.Remove(this);
+
+            cleanedUp = true;
+        }
+
+        // HashSets for all adjacent network next to the shuttle and HashSetQueues for networks waiting to give content to the Shuttle
         public HashSet<PlumbingNet> AdjacentWaterNetworks = new HashSet<PlumbingNet>();
         public HashSetQueue<PlumbingNet> PendingWaterNetworks = new HashSetQueue<PlumbingNet>();
-
-        // Adjacent and pending oil networks
         public HashSet<PipelineNet> AdjacentOilNetworks = new HashSet<PipelineNet>();
         public HashSetQueue<PipelineNet> PendingOilNetworks = new HashSetQueue<PipelineNet>();
 
@@ -266,6 +287,7 @@ namespace HeavyLiquidShuttleMod
             __result -= accepted;
         }
 
+        // Smaller helper so OnShuttleTick isn't repeating this 4x times
         private void PrepareTankForReceiving(TankState tank)
         {
             if (tank.Counter < 2)
@@ -274,8 +296,15 @@ namespace HeavyLiquidShuttleMod
             tank.ReceiveAllowance = 1.0;
         }
 
+        // Prepare the Tanks for another receiving cycle
         private void OnShuttleTick()
         {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
             ShuttleSearch.CheckCellsAroundShuttle(shuttle, out AdjacentWaterNetworks, out AdjacentOilNetworks);
 
             // Water networks
@@ -299,8 +328,14 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Method to find "Valid Nets", networks that are connected and aren't currently pushing to the Shuttle
         private void OnTransferTick()
         {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
 
             // Water logic
             if (AdjacentWaterNetworks.Count > 0)
@@ -357,6 +392,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Method to actually perform the transfer on water network and validate the transfer request
         private void TransferTank(TankState tank, PlumbingNet waterNet)
         {
             if (tank.Content != StoredType.Water)
@@ -397,6 +433,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Method to actually perform the transfer on oil network and validate the transfer request
         private void TransferTank(TankState tank, PipelineNet oilNet)
         {
             if (tank.Content != StoredType.Oil)
@@ -436,6 +473,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Gizmos for enabling transfer of water and oil from Shuttle Tanks
         private IEnumerable<Gizmo> AddGizmos()
         {
             if (AdjacentWaterNetworks.Count > 0 || AdjacentOilNetworks.Count > 0)
@@ -524,7 +562,8 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        public void StartOilSpill(float spilledAmount)
+        // Small helper that starts Rimefeller's oil spill mechanic
+        private void StartOilSpill(float spilledAmount)
         {
 
             if (!shuttle.OilConnectionAt.IsValid)

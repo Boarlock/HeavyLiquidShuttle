@@ -17,8 +17,14 @@
     <Reference Include="PipeSystem">
       <HintPath>..\..\..\..\..\..\Games\Rimworld\Mods\VEF\1.6\Assemblies\PipeSystem.dll</HintPath>
     </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>..\..\..\..\..\..\Games\Rimworld\Mods\VEF\1.6\Assemblies\System.Buffers.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="VEF">
+      <HintPath>..\..\..\..\..\..\Games\Rimworld\Mods\VEF\1.6\Assemblies\VEF.dll</HintPath>
     </Reference>
   </ItemGroup>
 

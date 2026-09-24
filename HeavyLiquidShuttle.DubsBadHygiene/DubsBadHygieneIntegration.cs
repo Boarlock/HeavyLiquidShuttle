@@ -21,8 +21,13 @@ namespace HeavyLiquidShuttleMod
 
     public class DubsBadHygieneIntegration
     {
+        // List of instances of all DBH Integrations
         private static readonly HashSet<DubsBadHygieneIntegration> Instances = new HashSet<DubsBadHygieneIntegration>();
+
+        // shuttle specific to this instance of DBH Integration
         private readonly HeavyLiquidShuttle shuttle;
+
+        // Constructor that registers tick events and Gizmo function from CompHeavyLiquidShuttle
         public DubsBadHygieneIntegration(HeavyLiquidShuttle shuttle)
         {
             this.shuttle = shuttle;
@@ -34,6 +39,7 @@ namespace HeavyLiquidShuttleMod
             HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
         }
 
+        // Static constructor for all DBH instacnes to patch the relevant DBH method
         static DubsBadHygieneIntegration()
         {
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dbh");
@@ -47,8 +53,25 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] DubsBadHygiene integration loaded.");
         }
 
-        public HashSet<PlumbingNet> AdjacentNetworks = new HashSet<PlumbingNet>();
-        public HashSetQueue<PlumbingNet> PendingNetworks = new HashSetQueue<PlumbingNet>();
+        // Cleanup method when the Shuttle is destroyed to let all subscribers of the Tick events to unsubscribe themselves
+        private bool cleanedUp;
+        private void Cleanup()
+        {
+            if (cleanedUp)
+                return;
+
+            HeavyLiquidShuttle.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttle.TickIntegration -= OnTransferTick;
+            HeavyLiquidShuttle.GizmoIntegration -= AddGizmos;
+
+            Instances.Remove(this);
+
+            cleanedUp = true;
+        }
+
+        // HashSet for all adjacent network next to the shuttle and HashSetQueue for networks waiting to give content to the Shuttle
+        private HashSet<PlumbingNet> AdjacentNetworks = new HashSet<PlumbingNet>();
+        private HashSetQueue<PlumbingNet> PendingNetworks = new HashSetQueue<PlumbingNet>();
 
         public static void Prefix(PlumbingNet __instance, out PushWaterState __state)
         {
@@ -161,8 +184,15 @@ namespace HeavyLiquidShuttleMod
             __result -= accepted;
         }
 
+        // Prepare the Tanks for another receiving cycle
         private void OnShuttleTick()
         {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
             AdjacentNetworks = ShuttleWaterSearch.CheckCellsAroundShuttle(shuttle);
 
             if (AdjacentNetworks.Count <= 0)
@@ -184,8 +214,15 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Method to find a "Valid Net", a network that's connected and isn't currently pushing to the Shuttle
         private void OnTransferTick()
         {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
             if (AdjacentNetworks.Count <= 0)
                 return;
 
@@ -213,6 +250,7 @@ namespace HeavyLiquidShuttleMod
             TransferTank(shuttle.TankB, validNet);
         }
 
+        // Method to actually perform the transfer and validate the transfer request
         private void TransferTank(TankState tank, PlumbingNet net)
         {
             if (tank.Content != StoredType.Water)
@@ -253,6 +291,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Gizmos for enabling transfer of water from Shuttle Tanks
         private IEnumerable<Gizmo> AddGizmos()
         {
             if (AdjacentNetworks.Count > 0)

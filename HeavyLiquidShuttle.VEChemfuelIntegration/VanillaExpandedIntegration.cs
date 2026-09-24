@@ -8,7 +8,10 @@ namespace HeavyLiquidShuttleMod
 {
     public class VanillaExpandedIntegration
     {
+        // shuttle specific to this instance of DBH Integration
         private readonly HeavyLiquidShuttle shuttle;
+
+        // Constructor that registers tick events and Gizmo function from CompHeavyLiquidShuttle
         public VanillaExpandedIntegration(HeavyLiquidShuttle shuttle)
         {
             this.shuttle = shuttle;
@@ -20,23 +23,55 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] VE shared integration loaded.");
         }
 
-        public HashSet<PipeNet> DeepchemNetworks = new HashSet<PipeNet>();
-        public HashSet<PipeNet> HelixienNetworks = new HashSet<PipeNet>();
+        // Cleanup method when the Shuttle is destroyed to let all subscribers of the Tick events to unsubscribe themselves
+        private bool cleanedUp;
+        private void Cleanup()
+        {
+            if (cleanedUp)
+                return;
 
+            HeavyLiquidShuttle.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttle.TickIntegration -= OnTransferTick;
+            HeavyLiquidShuttle.GizmoIntegration -= AddGizmos;
+
+            cleanedUp = true;
+        }
+
+        // HashSets for all adjacent network next to the shuttle and HashSetQueues for networks waiting to give content to the Shuttle
+        private HashSet<PipeNet> DeepchemNetworks = new HashSet<PipeNet>();
+        private HashSet<PipeNet> HelixienNetworks = new HashSet<PipeNet>();
         private HashSetQueue<PipeNet> DeepchemPendingNets = new HashSetQueue<PipeNet>();
         private HashSetQueue<PipeNet> HelixienPendingNets = new HashSetQueue<PipeNet>();
 
+        // Static field gathered through reflection for VE's markedForTransfer field and helper method to get it
         private static readonly FieldInfo MarkedForTransferField = typeof(PipeNet).GetField("markedForTransfer", BindingFlags.Instance | BindingFlags.NonPublic);
-
         private List<CompResourceStorage> GetMarkedForTransfer(PipeNet net)
         {
             return (List<CompResourceStorage>)MarkedForTransferField.GetValue(net);
         }
 
-        private void OnShuttleTick() => ShuttleVESearch.CheckCellsAroundShuttle(shuttle, out DeepchemNetworks, out HelixienNetworks);
-        
+        // Only thing to do for VE is to check around the shuttle or call Cleanup if the Shuttle is Destroyed
+        private void OnShuttleTick()
+        {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
+            ShuttleVESearch.CheckCellsAroundShuttle(shuttle, out DeepchemNetworks, out HelixienNetworks);
+        }
+
+        // Method to find "Valid Nets", networks that are connected and aren't currently pushing to the Shuttle
+        // This method also handles queueing for receiving network and calling of the method responsible
         private void OnTransferTick()
         {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
             StoredType type;
             PipeNet? validNet = null;
             bool alreadySupplied = false;
@@ -174,6 +209,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Method to actually perform the transfer from a Shuttle Tank to deepchem/helixien tanks (storages) and validate the transfer request
         private void TransferToTank(TankState tank, PipeNet net, StoredType type)
         {
             if (tank.TankStorage <= 0f)
@@ -213,6 +249,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Method to actually perform the transfer from deepchem/helixien tanks (storages) to a Shuttle Tank
         private void TransferFromNetwork(TankState tank, PipeNet net, StoredType type, List<CompResourceStorage> sourceStorages)
         {
             if (tank.IsTransferringFluid)
@@ -247,6 +284,7 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
+        // Gizmos for enabling transfer of deepchem and helixien from Shuttle Tanks
         private IEnumerable<Gizmo> AddGizmos()
         {
             if (DeepchemNetworks.Count > 0 || HelixienNetworks.Count > 0)
