@@ -107,7 +107,7 @@ namespace HeavyLiquidShuttleMod
 
             TankState? tank = integration.shuttle.GetTankForContent(StoredType.Water);
 
-            if (tank == null)
+            if (tank == null || tank.IsLocked)
                 return;
 
             __state.WaterInstance = __instance;
@@ -218,7 +218,7 @@ namespace HeavyLiquidShuttleMod
 
             TankState? tank = integration.shuttle.GetTankForContent(StoredType.Oil);
 
-            if (tank == null)
+            if (tank == null || tank.IsLocked)
                 return;
 
             __state.OilInstance = __instance;
@@ -398,6 +398,9 @@ namespace HeavyLiquidShuttleMod
         // Method to actually perform the transfer on water network and validate the transfer request
         private void TransferTank(TankState tank, PlumbingNet waterNet)
         {
+            if (tank.IsLocked)
+                return;
+
             if (tank.Content != StoredType.Water)
                 return;
 
@@ -439,6 +442,9 @@ namespace HeavyLiquidShuttleMod
         // Method to actually perform the transfer on oil network and validate the transfer request
         private void TransferTank(TankState tank, PipelineNet oilNet)
         {
+            if (tank.IsLocked)
+                return;
+
             if (tank.Content != StoredType.Oil)
                 return;
 

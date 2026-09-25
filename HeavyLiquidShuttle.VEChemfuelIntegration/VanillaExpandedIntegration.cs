@@ -212,6 +212,9 @@ namespace HeavyLiquidShuttleMod
         // Method to actually perform the transfer from a Shuttle Tank to deepchem/helixien tanks (storages) and validate the transfer request
         private void TransferToTank(TankState tank, PipeNet net, StoredType type)
         {
+            if (tank.IsLocked)
+                return;
+
             if (tank.TankStorage <= 0f)
                 return;
 
@@ -252,6 +255,9 @@ namespace HeavyLiquidShuttleMod
         // Method to actually perform the transfer from deepchem/helixien tanks (storages) to a Shuttle Tank
         private void TransferFromNetwork(TankState tank, PipeNet net, StoredType type, List<CompResourceStorage> sourceStorages)
         {
+            if (tank.IsLocked)
+                return;
+
             if (tank.IsTransferringFluid)
                 return;
 

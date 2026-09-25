@@ -100,14 +100,15 @@ namespace HeavyLiquidShuttleMod
     {
         public float TankCapacity = 1250f;
         public float TankStorage = 0f;
-        public StoredType Content = StoredType.Empty;
-        public bool IsContaminated = false;
 
         public int Counter = 0;
         public int Counter2 = 0;
+        public bool IsLocked;
         public bool TransferEnabled;
+        public bool IsContaminated = false;
         public bool IsTransferringFluid;
         public double ReceiveAllowance = 1.0;
+        public StoredType Content = StoredType.Empty;
     }
 
     public static class LibraryLoaders

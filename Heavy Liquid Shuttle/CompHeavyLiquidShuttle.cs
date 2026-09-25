@@ -75,10 +75,16 @@ namespace HeavyLiquidShuttleMod
         public TankState TankA = new TankState();
         public TankState TankB = new TankState();
 
-        // toggle for when a Shuttle Tank is actively transferring
+        // Toggle for when a Shuttle Tank is actively transferring
         public void ToggleTransfer(TankState tank)
         {
             tank.TransferEnabled = !tank.TransferEnabled;
+        }
+
+        // Toggle for when a Shuttle Tank is actively locked
+        public void ToggleLock(TankState tank)
+        {
+            tank.IsLocked = !tank.IsLocked;
         }
 
         // Used for placing Oil Spills from Rimefeller
@@ -87,16 +93,16 @@ namespace HeavyLiquidShuttleMod
         // Helper for returning Shuttle Tanks
         public TankState? GetTankForContent(StoredType content)
         {
-            if (TankA.Content == content && TankA.TankStorage < TankA.TankCapacity)
+            if (TankA.Content == content && TankA.TankStorage < TankA.TankCapacity && !TankA.IsLocked)
                 return TankA;
 
-            if (TankB.Content == content && TankB.TankStorage < TankB.TankCapacity)
+            if (TankB.Content == content && TankB.TankStorage < TankB.TankCapacity && !TankB.IsLocked)
                 return TankB;
 
-            if (TankA.Content == StoredType.Empty)
+            if (TankA.Content == StoredType.Empty && !TankA.IsLocked)
                 return TankA;
 
-            if (TankB.Content == StoredType.Empty)
+            if (TankB.Content == StoredType.Empty && !TankB.IsLocked)
                 return TankB;
 
             return null;
@@ -151,13 +157,36 @@ namespace HeavyLiquidShuttleMod
             foreach (Gizmo gizmo in base.CompGetGizmosExtra())
                 yield return gizmo;
 
+            yield return new Command_Toggle
+            {
+                defaultLabel = "Lock Tank A",
+                defaultDesc = "Tank A: Lock this tank so it cannot intake or output its contents.",
+                icon = ContentFinder<Texture2D>.Get("UI/Gizmo/LockTank"),
+                isActive = () => this.TankA.IsLocked,
+                toggleAction = () =>
+                {
+                    ToggleLock(this.TankA);
+                }
+            };
+            yield return new Command_Toggle
+            {
+                defaultLabel = "Lock Tank B",
+                defaultDesc = "Tank B: Lock this tank so it cannot intake or output its contents.",
+                icon = ContentFinder<Texture2D>.Get("UI/Gizmo/LockTank"),
+                isActive = () => this.TankB.IsLocked,
+                toggleAction = () =>
+                {
+                    ToggleLock(this.TankB);
+                }
+            };
+
             if (TankA.TankStorage > 0f)
             {
                 yield return new Command_Action
                 {
                     defaultLabel = "Drain Tank A",
                     defaultDesc = "Drain Tank A of its contents.",
-                    icon = ContentFinder<Texture2D>.Get("DBH/UI/drainOut"),
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/DrainOut"),
                     action = () =>
                     {
                         if (TankA.Content == StoredType.Water)
@@ -184,7 +213,7 @@ namespace HeavyLiquidShuttleMod
                 {
                     defaultLabel = "Drain Tank B",
                     defaultDesc = "Drain Tank B of its contents.",
-                    icon = ContentFinder<Texture2D>.Get("DBH/UI/drainOut"),
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/DrainOut"),
                     action = () =>
                     {
                         if (TankB.Content == StoredType.Water)
@@ -208,8 +237,13 @@ namespace HeavyLiquidShuttleMod
 
             if (GizmoIntegration != null)
             {
-                foreach (Gizmo gizmo in GizmoIntegration.Invoke())
-                    yield return gizmo;
+                foreach (Delegate subscriber in GizmoIntegration.GetInvocationList())
+                {
+                    Func<IEnumerable<Gizmo>> integration = (Func<IEnumerable<Gizmo>>)subscriber;
+
+                    foreach (Gizmo gizmo in integration())
+                        yield return gizmo;
+                }
             }
         }
 
@@ -240,6 +274,8 @@ namespace HeavyLiquidShuttleMod
             Scribe_Values.Look(ref TankB.Content, "tankBContent", StoredType.Empty);
             Scribe_Values.Look(ref TankA.TransferEnabled, "tankATransferEnabled", false);
             Scribe_Values.Look(ref TankB.TransferEnabled, "tankBTransferEnabled", false);
+            Scribe_Values.Look(ref TankA.IsLocked, "tankALocked", false);
+            Scribe_Values.Look(ref TankB.IsLocked, "tankBLocked", false);
         }
     }
 }
