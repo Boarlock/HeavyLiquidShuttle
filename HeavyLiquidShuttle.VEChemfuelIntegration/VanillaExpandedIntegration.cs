@@ -83,8 +83,6 @@ namespace HeavyLiquidShuttleMod
             if (shuttle.TankB.Counter2 < 2)
                 shuttle.TankB.Counter2++;
 
-            Log.Message("[HeavyLiquidShuttle] VEF OnTransferTick running.");
-
             // Deepchem logic
             if (DeepchemNetworks.Count > 0)
             {
