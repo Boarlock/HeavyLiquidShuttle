@@ -2,39 +2,184 @@
 using Rimefeller;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
-    public static class RimefellerIntegration
+    public class PushCrudeState
     {
-        public static Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>> AdjacentNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>>();
-        public static void Initialize()
+        // Vars to track transfer state across Prefix to Postfix
+        public PipelineNet? Instance;
+        public TankState? Tank;
+        public HeavyLiquidShuttle? Shuttle;
+
+        // To track what water storages recieved water from our shuttle if we pushed.
+        public RimefellerIntegration? Integration;
+    }
+
+    public class RimefellerIntegration
+    {
+        // List of instances of all DBH Integrations
+        private static readonly HashSet<RimefellerIntegration> Instances = new HashSet<RimefellerIntegration>();
+
+        // shuttle specific to this instance of DBH Integration
+        private readonly HeavyLiquidShuttle shuttle;
+
+        // Constructor that registers tick events and Gizmo function from CompHeavyLiquidShuttle
+        public RimefellerIntegration(HeavyLiquidShuttle shuttle)
         {
-            HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
-            HeavyLiquidShuttle.TickIntegration += OnTransferTick;
-            HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
+            this.shuttle = shuttle;
 
-            HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
+            Instances.Add(this);
 
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnTransferTick;
+            shuttle.OilSpillIntegration += StartOilSpill;
+            shuttle.GizmoIntegration += AddGizmos;
+        }
+
+        // Static constructor for all DBH instacnes to patch the relevant Rimefeller method
+        static RimefellerIntegration()
+        {
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.rimefeller");
-            harmony.PatchAll();
+
+            MethodInfo pushOil = AccessTools.Method(typeof(PipelineNet), nameof(PipelineNet.PushCrude));
+            MethodInfo prefix = AccessTools.Method(typeof(RimefellerIntegration), nameof(Prefix));
+            MethodInfo postfix = AccessTools.Method(typeof(RimefellerIntegration), nameof(Postfix));
+
+            harmony.Patch(pushOil, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
 
             Log.Message("[HeavyLiquidShuttle] Rimefeller integration loaded.");
         }
 
-        private static void OnShuttleTick(HeavyLiquidShuttle shuttle)
+        // Cleanup method when the Shuttle is destroyed to let all subscribers of the Tick events to unsubscribe themselves
+        private bool cleanedUp;
+        private void Cleanup()
         {
-            HashSet<PipelineNet> newNets = ShuttleOilSearch.CheckCellsAroundShuttle(shuttle);
+            if (cleanedUp)
+                return;
 
-            if (newNets.Count == 0)
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnTransferTick;
+            shuttle.OilSpillIntegration -= StartOilSpill;
+            shuttle.GizmoIntegration -= AddGizmos;
+
+            Instances.Remove(this);
+
+            cleanedUp = true;
+        }
+
+        // HashSet for all adjacent network next to the shuttle and HashSetQueue for networks waiting to give content to the Shuttle
+        private HashSet<PipelineNet> AdjacentNetworks = new HashSet<PipelineNet>();
+        private HashSetQueue<PipelineNet> PendingNetworks = new HashSetQueue<PipelineNet>();
+
+        public static void Prefix(PipelineNet __instance, out PushCrudeState __state)
+        {
+            __state = new PushCrudeState();
+
+            RimefellerIntegration? integration = null;
+
+            foreach (RimefellerIntegration instance in Instances)
             {
-                AdjacentNetworks.Remove(shuttle);
+                if (instance.AdjacentNetworks.Contains(__instance))
+                {
+                    integration = instance;
+                    break;
+                }
+            }
+
+            if (integration == null)
+                return;
+
+            TankState? tank = integration.shuttle.GetTankForContent(StoredType.Oil);
+
+            if (tank == null || tank.IsLocked)
+                return;
+
+            __state.Instance = __instance;
+            __state.Tank = tank;
+            __state.Shuttle = integration.shuttle;
+            __state.Integration = integration;
+        }
+
+        public static void Postfix(PushCrudeState __state, ref double __result)
+        {
+            // This PushCrude call was not associated with one of our shuttles.
+            if (__state.Instance == null || __state.Tank == null || __state.Shuttle == null || __state.Integration == null)
+                return;
+
+            // If Rimefeller completely satisfied the request, nothing remains for us.
+            if (__result <= 0.0)
+                return;
+
+            if (__state.Tank.IsTransferringFluid)
+                return;
+
+            if (__state.Tank.ReceiveAllowance <= 0f)
+            {
+                __state.Integration.PendingNetworks.Enqueue(__state.Instance);
                 return;
             }
 
-            AdjacentNetworks[shuttle] = newNets;
+            if (__state.Integration.PendingNetworks.Count > 0)
+            {
+                // Network in Queue has become stale.
+                if (__state.Tank.Counter >= 2)
+                {
+                    __state.Integration.PendingNetworks.Dequeue();
+                    __state.Tank.Counter = 0;
+
+                    return;
+                }
+
+                // Check current call against next item in the Queue
+                if (__state.Integration.PendingNetworks.Peek() != __state.Instance)
+                    return;
+
+                // This network is now being served.
+                __state.Integration.PendingNetworks.Dequeue();
+            }
+
+            //Reset the Queue counter
+            __state.Tank.Counter = 0;
+
+            // Safer way to update storage so this method only gives what was taken.
+            double freeCapacity = __state.Tank.TankCapacity - __state.Tank.TankStorage;
+
+            if (freeCapacity <= 0.0)
+                return;
+
+            double accepted = Math.Min(__result, Math.Min(freeCapacity, __state.Tank.ReceiveAllowance));
+
+            if (accepted <= 0.0)
+                return;
+
+            // Update shuttle's mass and oil storage.
+            __state.Tank.Content = StoredType.Oil;
+            __state.Tank.TankStorage += (float)accepted;
+            __state.Tank.ReceiveAllowance -= accepted;
+            __state.Tank.IsContaminated = true;
+
+            MassPatch.NotifyLiquidMassChanged(__state.Shuttle);
+
+            __result -= accepted;
+        }
+
+        // Prepare the Tanks for another receiving cycle
+        private void OnShuttleTick()
+        {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
+            AdjacentNetworks = ShuttleOilSearch.CheckCellsAroundShuttle(shuttle);
+
+            if (AdjacentNetworks.Count <= 0)
+                return;
 
             if (shuttle.TankA.Content == StoredType.Oil)
             {
@@ -52,14 +197,21 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static void OnTransferTick(HeavyLiquidShuttle shuttle)
+        // Method to find a "Valid Net", a network that's connected and isn't currently pushing to the Shuttle
+        private void OnTransferTick()
         {
-            if (!AdjacentNetworks.TryGetValue(shuttle, out HashSet<PipelineNet> nets))
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
+            if (AdjacentNetworks.Count <= 0)
                 return;
 
             PipelineNet? validNet = null;
 
-            foreach (PipelineNet net in nets)
+            foreach (PipelineNet net in AdjacentNetworks)
             {
                 foreach (CompStorageTank storage in net.OilStorage)
                 {
@@ -77,17 +229,16 @@ namespace HeavyLiquidShuttleMod
             if (validNet == null)
                 return;
 
-            TransferToTank(shuttle, validNet);
+            TransferTank(shuttle.TankA, validNet);
+            TransferTank(shuttle.TankB, validNet);
         }
 
-        private static void TransferToTank(HeavyLiquidShuttle shuttle, PipelineNet net)
+        // Method to actually perform the transfer and validate the transfer request
+        private void TransferTank(TankState tank, PipelineNet net)
         {
-            TransferTank(shuttle, shuttle.TankA, net);
-            TransferTank(shuttle, shuttle.TankB, net);
-        }
+            if (tank.IsLocked)
+                return;
 
-        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PipelineNet net)
-        {
             if (tank.Content != StoredType.Oil)
                 return;
 
@@ -125,9 +276,10 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static IEnumerable<Gizmo> AddGizmos(HeavyLiquidShuttle shuttle)
+        // Gizmos for enabling transfer of oil from Shuttle Tanks
+        private IEnumerable<Gizmo> AddGizmos()
         {
-            if (AdjacentNetworks.ContainsKey(shuttle))
+            if (AdjacentNetworks.Count > 0)
             {
                 if (shuttle.TankA.Content == StoredType.Oil && shuttle.TankA.TankStorage > 0f)
                 {
@@ -172,9 +324,9 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        public static void StartOilSpill(HeavyLiquidShuttle shuttle, float spilledAmount)
+        // Small helper that starts Rimefeller's oil spill mechanic
+        private void StartOilSpill(float spilledAmount)
         {
-
             if (!shuttle.OilConnectionAt.IsValid)
                 return;
 

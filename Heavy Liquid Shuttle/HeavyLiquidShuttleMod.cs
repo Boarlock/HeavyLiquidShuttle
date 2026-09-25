@@ -37,14 +37,26 @@ namespace HeavyLiquidShuttleMod
 
             Application.focusChanged += HeavyLiquidShuttleManager.OnApplicationFocusChanged;
 
+            HeavyLiquidShuttleManager.IsInitialized = true;
+
             Log.Message($"[HeavyLiquidShuttle] Initialization completed.");
         }
     }
 
-    public class HeavyLiquidShuttleManager
+    public static class HeavyLiquidShuttleManager
     {
+        internal static bool IsInitialized = false;
+
+        // Mass conversions for liquids and gas.
+        public const float CrudeMassPerLiter = 0.85f;
+        public const float DeepchemMassPerLiter = 1.2f;
+        public const float HelixienMassPerLiter = 0.2f;
+
         internal static void OnApplicationFocusChanged(bool hasFocus)
         {
+            if (!IsInitialized)
+                return;
+
             if (hasFocus)
                 return;
 
@@ -75,8 +87,37 @@ namespace HeavyLiquidShuttleMod
         }
     }
 
+    public enum StoredType
+    {
+        Empty,
+        Water,
+        Oil,
+        Deepchem,
+        Helixien
+    }
+
+    public class TankState
+    {
+        public float TankCapacity = 1250f;
+        public float TankStorage = 0f;
+
+        public int Counter = 0;
+        public int Counter2 = 0;
+        public bool IsLocked;
+        public bool TransferEnabled;
+        public bool IsContaminated = false;
+        public bool IsTransferringFluid;
+        public double ReceiveAllowance = 1.0;
+        public StoredType Content = StoredType.Empty;
+    }
+
     public static class LibraryLoaders
     {
+        public static Type? DBHIntegrationType { get; private set; }
+        public static Type? RimefellerIntegrationType { get; private set; }
+        public static Type? DubwiseSharedIntegrationType { get; private set; }
+        public static Type? VESharedIntegrationType { get; private set; }
+
         public static void DBHLoad()
         {
             string coreAssemblyPath = typeof(LibraryLoaders).Assembly.Location;
@@ -96,9 +137,7 @@ namespace HeavyLiquidShuttleMod
             try
             {
                 Assembly assembly = Assembly.LoadFrom(integrationPath);
-                Type integrationType = assembly.GetType("HeavyLiquidShuttleMod.DubsBadHygieneIntegration");
-                MethodInfo initializeMethod = integrationType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static);
-                initializeMethod.Invoke(null, null);
+                DBHIntegrationType = assembly.GetType("HeavyLiquidShuttleMod.DubsBadHygieneIntegration");
             }
             catch (Exception ex)
             {
@@ -125,9 +164,7 @@ namespace HeavyLiquidShuttleMod
             try
             {
                 Assembly assembly = Assembly.LoadFrom(integrationPath);
-                Type integrationType = assembly.GetType("HeavyLiquidShuttleMod.RimefellerIntegration");
-                MethodInfo initializeMethod = integrationType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static);
-                initializeMethod.Invoke(null, null);
+                RimefellerIntegrationType = assembly.GetType("HeavyLiquidShuttleMod.RimefellerIntegration");
             }
             catch (Exception ex)
             {
@@ -154,9 +191,7 @@ namespace HeavyLiquidShuttleMod
             try
             {
                 Assembly assembly = Assembly.LoadFrom(integrationPath);
-                Type integrationType = assembly.GetType("HeavyLiquidShuttleMod.DubwiseSharedIntegration");
-                MethodInfo initializeMethod = integrationType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static);
-                initializeMethod.Invoke(null, null);
+                DubwiseSharedIntegrationType = assembly.GetType("HeavyLiquidShuttleMod.DubwiseSharedIntegration");
             }
             catch (Exception ex)
             {
@@ -183,9 +218,7 @@ namespace HeavyLiquidShuttleMod
             try
             {
                 Assembly assembly = Assembly.LoadFrom(integrationPath);
-                Type integrationType = assembly.GetType("HeavyLiquidShuttleMod.VanillaExpandedIntegration");
-                MethodInfo initializeMethod = integrationType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static);
-                initializeMethod.Invoke(null, null);
+                VESharedIntegrationType = assembly.GetType("HeavyLiquidShuttleMod.VanillaExpandedIntegration");
             }
             catch (Exception ex)
             {

@@ -1,32 +1,297 @@
-﻿using HarmonyLib;
+﻿using DubsBadHygiene;
+using HarmonyLib;
 using Rimefeller;
-using DubsBadHygiene;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
-    public static class DubwiseSharedIntegration
+    public class PushPatchstate
     {
-        public static Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>> AdjacentOilNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PipelineNet>>();
-        public static Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>> AdjacentWaterNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>>();
-        public static void Initialize()
+        // Vars to track transfer state across Prefix to Postfix
+        public PlumbingNet? WaterInstance;
+        public PipelineNet? OilInstance;
+        public TankState? Tank;
+        public HeavyLiquidShuttle? Shuttle;
+        public DubwiseSharedIntegration? Integration;
+
+        // To track what water storages recieved water from our shuttle if we pushed.
+        public Dictionary<CompWaterStorage, float> WaterStorages = new Dictionary<CompWaterStorage, float>();
+    }
+
+    public class DubwiseSharedIntegration
+    {
+        // List of instances of all DBH Integrations
+        private static readonly HashSet<DubwiseSharedIntegration> Instances = new HashSet<DubwiseSharedIntegration>();
+
+        // shuttle specific to this instance of DBH Integration
+        private readonly HeavyLiquidShuttle shuttle;
+
+        // Constructor that registers tick events and Gizmo function from CompHeavyLiquidShuttle
+        public DubwiseSharedIntegration(HeavyLiquidShuttle shuttle)
         {
-            HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
-            HeavyLiquidShuttle.TickIntegration += OnTransferTick;
-            HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
+            this.shuttle = shuttle;
 
-            HeavyLiquidShuttle.OilSpillIntegration += StartOilSpill;
+            Instances.Add(this);
 
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnTransferTick;
+            shuttle.OilSpillIntegration += StartOilSpill;
+            shuttle.GizmoIntegration += AddGizmos;
+        }
+
+        // Static constructor for all DBH instacnes to patch the relevant DBH, and Rimefeller method
+        static DubwiseSharedIntegration()
+        {
             Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dubwiseshared");
-            harmony.PatchAll();
+
+            // Method target for PushWater and PushCrude
+            MethodInfo pushWater = AccessTools.Method(typeof(PlumbingNet), nameof(PlumbingNet.PushWater));
+            MethodInfo pushOil = AccessTools.Method(typeof(PipelineNet), nameof(PipelineNet.PushCrude));
+
+            // Seperate Prefix and Postfix identifiers for both PushWater and PushCrude
+            MethodInfo waterPrefix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(WaterPrefix));
+            MethodInfo waterPostfix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(WaterPostfix));
+            MethodInfo oilPrefix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(OilPrefix));
+            MethodInfo oilPostfix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(OilPostfix));
+
+            harmony.Patch(pushWater, prefix: new HarmonyMethod(waterPrefix), postfix: new HarmonyMethod(waterPostfix));
+            harmony.Patch(pushOil, prefix: new HarmonyMethod(oilPrefix), postfix: new HarmonyMethod(oilPostfix));
 
             Log.Message("[HeavyLiquidShuttle] Dubwise shared integration loaded.");
         }
 
-        private static void PrepareTankForReceiving(TankState tank)
+        // Cleanup method when the Shuttle is destroyed to let all subscribers of the Tick events to unsubscribe themselves
+        private bool cleanedUp;
+        private void Cleanup()
+        {
+            if (cleanedUp)
+                return;
+
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnTransferTick;
+            shuttle.OilSpillIntegration -= StartOilSpill;
+            shuttle.GizmoIntegration -= AddGizmos;
+
+            Instances.Remove(this);
+
+            cleanedUp = true;
+        }
+
+        // HashSets for all adjacent network next to the shuttle and HashSetQueues for networks waiting to give content to the Shuttle
+        public HashSet<PlumbingNet> AdjacentWaterNetworks = new HashSet<PlumbingNet>();
+        public HashSetQueue<PlumbingNet> PendingWaterNetworks = new HashSetQueue<PlumbingNet>();
+        public HashSet<PipelineNet> AdjacentOilNetworks = new HashSet<PipelineNet>();
+        public HashSetQueue<PipelineNet> PendingOilNetworks = new HashSetQueue<PipelineNet>();
+
+        public static void WaterPrefix(PlumbingNet __instance, out PushPatchstate __state)
+        {
+            __state = new PushPatchstate();
+
+            DubwiseSharedIntegration? integration = null;
+
+            foreach (DubwiseSharedIntegration instance in Instances)
+            {
+                if (instance.AdjacentWaterNetworks.Contains(__instance))
+                {
+                    integration = instance;
+                    break;
+                }
+            }
+
+            if (integration == null)
+                return;
+
+            TankState? tank = integration.shuttle.GetTankForContent(StoredType.Water);
+
+            if (tank == null || tank.IsLocked)
+                return;
+
+            __state.WaterInstance = __instance;
+            __state.Tank = tank;
+            __state.Shuttle = integration.shuttle;
+            __state.Integration = integration;
+
+            foreach (CompWaterStorage waterTower in __instance.WaterTowers)
+            {
+                __state.WaterStorages[waterTower] = waterTower.WaterStorage;
+            }
+        }
+
+        public static void WaterPostfix(PushPatchstate __state, ref float __result)
+        {
+            // This PushWater call was not associated with one of our shuttles.
+            if (__state.WaterInstance == null || __state.Tank == null || __state.Shuttle == null || __state.Integration == null)
+                return;
+
+            // See which DBH towers actually received water from this shuttle.
+            foreach (KeyValuePair<CompWaterStorage, float> entry in __state.WaterStorages)
+            {
+
+                CompWaterStorage waterTower = entry.Key;
+                float before = entry.Value;
+
+                if (waterTower.WaterStorage > before && __state.Tank.IsContaminated && __state.Tank.IsTransferringFluid)
+                {
+                    waterTower.WaterQuality = ContaminationLevel.Contaminated;
+                }
+            }
+
+            // If DBH completely satisfied the request, nothing remains for us.
+            if (__result <= 0f)
+                return;
+
+            if (__state.Tank.IsTransferringFluid)
+                return;
+
+            if (__state.Tank.ReceiveAllowance <= 0f)
+            {
+                __state.Integration.PendingWaterNetworks.Enqueue(__state.WaterInstance);
+                return;
+            }
+
+            if (__state.Integration.PendingWaterNetworks.Count > 0)
+            {
+
+                // Network in Queue has become stale.
+                if (__state.Tank.Counter >= 2)
+                {
+                    __state.Integration.PendingWaterNetworks.Dequeue();
+                    __state.Tank.Counter = 0;
+
+                    return;
+                }
+
+                // Check current call against next item in the Queue
+                if (__state.Integration.PendingWaterNetworks.Peek() != __state.WaterInstance)
+                    return;
+
+                // This network is now being served.
+                __state.Integration.PendingWaterNetworks.Dequeue();
+            }
+
+            //Reset the Queue counter
+            __state.Tank.Counter = 0;
+
+            // Safer way to update storage so this method only gives what was taken.
+            float freeCapacity = __state.Tank.TankCapacity - __state.Tank.TankStorage;
+
+            if (freeCapacity <= 0f)
+                return;
+
+            float accepted = Mathf.Min(__result, (float)__state.Tank.ReceiveAllowance, freeCapacity);
+
+            if (accepted <= 0f)
+                return;
+
+            // Update shuttle's mass and water storage.
+            __state.Tank.Content = StoredType.Water;
+            __state.Tank.TankStorage += accepted;
+            __state.Tank.ReceiveAllowance -= accepted;
+            __state.Tank.IsContaminated = __state.WaterInstance.IsNetContaminated();
+
+            MassPatch.NotifyLiquidMassChanged(__state.Shuttle);
+
+            __result -= accepted;
+        }
+
+        public static void OilPrefix(PipelineNet __instance, out PushPatchstate __state)
+        {
+            __state = new PushPatchstate();
+
+            DubwiseSharedIntegration? integration = null;
+
+            foreach (DubwiseSharedIntegration instance in Instances)
+            {
+                if (instance.AdjacentOilNetworks.Contains(__instance))
+                {
+                    integration = instance;
+                    break;
+                }
+            }
+
+            if (integration == null)
+                return;
+
+            TankState? tank = integration.shuttle.GetTankForContent(StoredType.Oil);
+
+            if (tank == null || tank.IsLocked)
+                return;
+
+            __state.OilInstance = __instance;
+            __state.Tank = tank;
+            __state.Shuttle = integration.shuttle;
+            __state.Integration = integration;
+        }
+
+        public static void OilPostfix(PushPatchstate __state, ref double __result)
+        {
+            // This PushCrude call was not associated with one of our shuttles.
+            if (__state.OilInstance == null || __state.Tank == null || __state.Shuttle == null || __state.Integration == null)
+                return;
+
+            // If Rimefeller completely satisfied the request, nothing remains for us.
+            if (__result <= 0.0)
+                return;
+
+            if (__state.Tank.IsTransferringFluid)
+                return;
+
+            if (__state.Tank.ReceiveAllowance <= 0f)
+            {
+                __state.Integration.PendingOilNetworks.Enqueue(__state.OilInstance);
+                return;
+            }
+
+            if (__state.Integration.PendingOilNetworks.Count > 0)
+            {
+                // Network in Queue has become stale.
+                if (__state.Tank.Counter >= 2)
+                {
+                    __state.Integration.PendingOilNetworks.Dequeue();
+                    __state.Tank.Counter = 0;
+
+                    return;
+                }
+
+                // Check current call against next item in the Queue
+                if (__state.Integration.PendingOilNetworks.Peek() != __state.OilInstance)
+                    return;
+
+                // This network is now being served.
+                __state.Integration.PendingOilNetworks.Dequeue();
+            }
+
+            //Reset the Queue counter
+            __state.Tank.Counter = 0;
+
+            // Safer way to update storage so this method only gives what was taken.
+            double freeCapacity = __state.Tank.TankCapacity - __state.Tank.TankStorage;
+
+            if (freeCapacity <= 0.0)
+                return;
+
+            double accepted = Math.Min(__result, Math.Min(freeCapacity, __state.Tank.ReceiveAllowance));
+
+            if (accepted <= 0.0)
+                return;
+
+            // Update shuttle's mass and oil storage.
+            __state.Tank.Content = StoredType.Oil;
+            __state.Tank.TankStorage += (float)accepted;
+            __state.Tank.ReceiveAllowance -= accepted;
+            __state.Tank.IsContaminated = true;
+
+            MassPatch.NotifyLiquidMassChanged(__state.Shuttle);
+
+            __result -= accepted;
+        }
+
+        // Smaller helper so OnShuttleTick isn't repeating this 4x times
+        private void PrepareTankForReceiving(TankState tank)
         {
             if (tank.Counter < 2)
                 tank.Counter++;
@@ -34,20 +299,20 @@ namespace HeavyLiquidShuttleMod
             tank.ReceiveAllowance = 1.0;
         }
 
-
-        private static void OnShuttleTick(HeavyLiquidShuttle shuttle)
+        // Prepare the Tanks for another receiving cycle
+        private void OnShuttleTick()
         {
-            ShuttleSearch.CheckCellsAroundShuttle(shuttle, out HashSet<PlumbingNet> waterNets, out HashSet<PipelineNet> oilNets);
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
+            ShuttleSearch.CheckCellsAroundShuttle(shuttle, out AdjacentWaterNetworks, out AdjacentOilNetworks);
 
             // Water networks
-            if (waterNets.Count == 0)
+            if (AdjacentWaterNetworks.Count > 0)
             {
-                AdjacentWaterNetworks.Remove(shuttle);
-            }
-            else
-            {
-                AdjacentWaterNetworks[shuttle] = waterNets;
-
                 if (shuttle.TankA.Content == StoredType.Water)
                     PrepareTankForReceiving(shuttle.TankA);
 
@@ -56,14 +321,8 @@ namespace HeavyLiquidShuttleMod
             }
 
             // Oil networks
-            if (oilNets.Count == 0)
+            if (AdjacentOilNetworks.Count > 0)
             {
-                AdjacentOilNetworks.Remove(shuttle);
-            }
-            else
-            {
-                AdjacentOilNetworks[shuttle] = oilNets;
-
                 if (shuttle.TankA.Content == StoredType.Oil)
                     PrepareTankForReceiving(shuttle.TankA);
 
@@ -72,14 +331,21 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static void OnTransferTick(HeavyLiquidShuttle shuttle)
+        // Method to find "Valid Nets", networks that are connected and aren't currently pushing to the Shuttle
+        private void OnTransferTick()
         {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
             // Water logic
-            if (AdjacentWaterNetworks.TryGetValue(shuttle, out HashSet<PlumbingNet> waterNets))
+            if (AdjacentWaterNetworks.Count > 0)
             {
                 PlumbingNet? validWaterNet = null;
 
-                foreach (PlumbingNet net in waterNets)
+                foreach (PlumbingNet net in AdjacentWaterNetworks)
                 {
                     foreach (CompWaterStorage storage in net.WaterTowers)
                     {
@@ -96,16 +362,17 @@ namespace HeavyLiquidShuttleMod
 
                 if (validWaterNet != null)
                 {
-                    TransferToTank(shuttle, validWaterNet);
+                    TransferTank(shuttle.TankA, validWaterNet);
+                    TransferTank(shuttle.TankB, validWaterNet);
                 }
             }
 
             // Oil logic
-            if (AdjacentOilNetworks.TryGetValue(shuttle, out HashSet<PipelineNet> oilNets))
+            if (AdjacentOilNetworks.Count > 0)
             {
                 PipelineNet? validOilNet = null;
 
-                foreach (PipelineNet net in oilNets)
+                foreach (PipelineNet net in AdjacentOilNetworks)
                 {
                     foreach (CompStorageTank storage in net.OilStorage)
                     {
@@ -122,25 +389,21 @@ namespace HeavyLiquidShuttleMod
 
                 if (validOilNet != null)
                 {
-                    TransferToTank(shuttle, validOilNet);
+                    TransferTank(shuttle.TankA, validOilNet);
+                    TransferTank(shuttle.TankB, validOilNet);
                 }
             }
         }
 
-        private static void TransferToTank(HeavyLiquidShuttle shuttle, PlumbingNet waterNet)
+        // Method to actually perform the transfer on water network and validate the transfer request
+        private void TransferTank(TankState tank, PlumbingNet waterNet)
         {
-            TransferTank(shuttle, shuttle.TankA, waterNet);
-            TransferTank(shuttle, shuttle.TankB, waterNet);
-        }
+            if (tank.IsLocked)
+                return;
 
-        private static void TransferToTank(HeavyLiquidShuttle shuttle, PipelineNet oilNet)
-        {
-            TransferTank(shuttle, shuttle.TankA, oilNet);
-            TransferTank(shuttle, shuttle.TankB, oilNet);
-        }
+            if (tank.Content != StoredType.Water)
+                return;
 
-        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PlumbingNet waterNet)
-        {
             if (tank.TankStorage <= 0f)
                 return;
 
@@ -148,9 +411,6 @@ namespace HeavyLiquidShuttleMod
                 return;
 
             if (!tank.TransferEnabled)
-                return;
-
-            if (tank.Content != StoredType.Water)
                 return;
 
             float amount = Mathf.Min(tank.TankStorage, 1f);
@@ -171,16 +431,23 @@ namespace HeavyLiquidShuttleMod
 
                 if (tank.TankStorage <= 0f)
                 {
-                    tank.IsContaminated = false;
                     tank.TankStorage = 0f;
                     tank.Content = StoredType.Empty;
                     tank.TransferEnabled = false;
+                    tank.IsContaminated = false;
                 }
             }
         }
 
-        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PipelineNet oilNet)
+        // Method to actually perform the transfer on oil network and validate the transfer request
+        private void TransferTank(TankState tank, PipelineNet oilNet)
         {
+            if (tank.IsLocked)
+                return;
+
+            if (tank.Content != StoredType.Oil)
+                return;
+
             if (tank.TankStorage <= 0f)
                 return;
 
@@ -188,9 +455,6 @@ namespace HeavyLiquidShuttleMod
                 return;
 
             if (!tank.TransferEnabled)
-                return;
-
-            if (tank.Content != StoredType.Oil)
                 return;
 
             double amount = Math.Min(tank.TankStorage, 1f);
@@ -218,9 +482,10 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static IEnumerable<Gizmo> AddGizmos(HeavyLiquidShuttle shuttle)
+        // Gizmos for enabling transfer of water and oil from Shuttle Tanks
+        private IEnumerable<Gizmo> AddGizmos()
         {
-            if (AdjacentWaterNetworks.ContainsKey(shuttle) || AdjacentOilNetworks.ContainsKey(shuttle))
+            if (AdjacentWaterNetworks.Count > 0 || AdjacentOilNetworks.Count > 0)
             {
                 if (shuttle.TankA.Content == StoredType.Water && shuttle.TankA.TankStorage > 0f)
                 {
@@ -306,7 +571,8 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        public static void StartOilSpill(HeavyLiquidShuttle shuttle, float spilledAmount)
+        // Small helper that starts Rimefeller's oil spill mechanic
+        private void StartOilSpill(float spilledAmount)
         {
 
             if (!shuttle.OilConnectionAt.IsValid)

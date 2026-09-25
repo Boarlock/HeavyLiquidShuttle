@@ -1,37 +1,202 @@
 ﻿using DubsBadHygiene;
 using HarmonyLib;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
-    public static class DubsBadHygieneIntegration
+    public class PushWaterState
     {
-        public static Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>> AdjacentNetworks = new Dictionary<HeavyLiquidShuttle, HashSet<PlumbingNet>>();
-        public static void Initialize()
+        // Vars to track transfer state across Prefix to Postfix
+        public PlumbingNet? Instance;
+        public TankState? Tank;
+        public HeavyLiquidShuttle? Shuttle;
+        public DubsBadHygieneIntegration? Integration;
+
+        // To track what water storages recieved water from our shuttle if we pushed.
+        public Dictionary<CompWaterStorage, float> WaterStorages = new Dictionary<CompWaterStorage, float>();
+    }
+
+    public class DubsBadHygieneIntegration
+    {
+        // List of instances of all DBH Integrations
+        private static readonly HashSet<DubsBadHygieneIntegration> Instances = new HashSet<DubsBadHygieneIntegration>();
+
+        // shuttle specific to this instance of DBH Integration
+        private readonly HeavyLiquidShuttle shuttle;
+
+        // Constructor that registers tick events and Gizmo function from CompHeavyLiquidShuttle
+        public DubsBadHygieneIntegration(HeavyLiquidShuttle shuttle)
         {
-            HeavyLiquidShuttle.TickIntegration += OnShuttleTick;
-            HeavyLiquidShuttle.TickIntegration += OnTransferTick;
-            HeavyLiquidShuttle.GizmoIntegration += AddGizmos;
+            this.shuttle = shuttle;
 
-            Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dbh");
-            harmony.PatchAll();
+            Instances.Add(this);
 
-            Log.Message("[HeavyLiquidShuttle] Dubs Bad Hygiene integration loaded.");
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration += OnTransferTick;
+            shuttle.GizmoIntegration += AddGizmos;
         }
 
-        private static void OnShuttleTick(HeavyLiquidShuttle shuttle)
+        // Static constructor for all DBH instacnes to patch the relevant DBH method
+        static DubsBadHygieneIntegration()
         {
-            HashSet<PlumbingNet> newNets = ShuttleWaterSearch.CheckCellsAroundShuttle(shuttle);
+            Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dbh");
 
-            if (newNets.Count == 0)
+            MethodInfo pushWater = AccessTools.Method(typeof(PlumbingNet), nameof(PlumbingNet.PushWater));
+            MethodInfo prefix = AccessTools.Method(typeof(DubsBadHygieneIntegration), nameof(Prefix));
+            MethodInfo postfix = AccessTools.Method(typeof(DubsBadHygieneIntegration), nameof(Postfix));
+
+            harmony.Patch(pushWater, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
+
+            Log.Message("[HeavyLiquidShuttle] DubsBadHygiene integration loaded.");
+        }
+
+        // Cleanup method when the Shuttle is destroyed to let all subscribers of the Tick events to unsubscribe themselves
+        private bool cleanedUp;
+        private void Cleanup()
+        {
+            if (cleanedUp)
+                return;
+
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttleGameComponent.TickIntegration -= OnTransferTick;
+            shuttle.GizmoIntegration -= AddGizmos;
+
+            Instances.Remove(this);
+
+            cleanedUp = true;
+        }
+
+        // HashSet for all adjacent network next to the shuttle and HashSetQueue for networks waiting to give content to the Shuttle
+        private HashSet<PlumbingNet> AdjacentNetworks = new HashSet<PlumbingNet>();
+        private HashSetQueue<PlumbingNet> PendingNetworks = new HashSetQueue<PlumbingNet>();
+
+        public static void Prefix(PlumbingNet __instance, out PushWaterState __state)
+        {
+            __state = new PushWaterState();
+
+            DubsBadHygieneIntegration? integration = null;
+
+            foreach (DubsBadHygieneIntegration instance in Instances)
             {
-                AdjacentNetworks.Remove(shuttle);
+                if (instance.AdjacentNetworks.Contains(__instance))
+                {
+                    integration = instance;
+                    break;
+                }
+            }
+
+            if (integration == null)
+                return;
+
+            TankState? tank = integration.shuttle.GetTankForContent(StoredType.Water);
+
+            if (tank == null || tank.IsLocked)
+                return;
+
+            __state.Instance = __instance;
+            __state.Tank = tank;
+            __state.Shuttle = integration.shuttle;
+            __state.Integration = integration;
+
+            foreach (CompWaterStorage waterTower in __instance.WaterTowers)
+            {
+                __state.WaterStorages[waterTower] = waterTower.WaterStorage;
+            }
+        }
+
+        public static void Postfix(PushWaterState __state, ref float __result)
+        {
+            // This PushWater call was not associated with one of our shuttles.
+            if (__state.Instance == null || __state.Tank == null || __state.Shuttle == null || __state.Integration == null)
+                return;
+
+            // See which DBH towers actually received water from this shuttle.
+            foreach (KeyValuePair<CompWaterStorage, float> entry in __state.WaterStorages)
+            {
+
+                CompWaterStorage waterTower = entry.Key;
+                float before = entry.Value;
+
+                if (waterTower.WaterStorage > before && __state.Tank.IsContaminated && __state.Tank.IsTransferringFluid)
+                {
+                    waterTower.WaterQuality = ContaminationLevel.Contaminated;
+                }
+            }
+
+            // If DBH completely satisfied the request, nothing remains for us.
+            if (__result <= 0f)
+                return;
+
+            if (__state.Tank.IsTransferringFluid)
+                return;
+
+            if (__state.Tank.ReceiveAllowance <= 0f)
+            {
+                __state.Integration.PendingNetworks.Enqueue(__state.Instance);
                 return;
             }
 
-            AdjacentNetworks[shuttle] = newNets;
+            if (__state.Integration.PendingNetworks.Count > 0)
+            {
+                
+                // Network in Queue has become stale.
+                if (__state.Tank.Counter >= 2)
+                {
+                    __state.Integration.PendingNetworks.Dequeue();
+                    __state.Tank.Counter = 0;
+
+                    return;
+                }
+
+                // Check current call against next item in the Queue
+                if (__state.Integration.PendingNetworks.Peek() != __state.Instance)
+                    return;
+
+                // This network is now being served.
+                __state.Integration.PendingNetworks.Dequeue();
+            }
+
+            //Reset the Queue counter
+            __state.Tank.Counter = 0;
+
+            // Safer way to update storage so this method only gives what was taken.
+            float freeCapacity = __state.Tank.TankCapacity - __state.Tank.TankStorage;
+
+            if (freeCapacity <= 0f)
+                return;
+
+            float accepted = Mathf.Min(__result, (float)__state.Tank.ReceiveAllowance, freeCapacity);
+
+            if (accepted <= 0f)
+                return;
+
+            // Update shuttle's mass and water storage.
+            __state.Tank.Content = StoredType.Water;
+            __state.Tank.TankStorage += accepted;
+            __state.Tank.ReceiveAllowance -= accepted;
+            __state.Tank.IsContaminated = __state.Instance.IsNetContaminated();
+
+            MassPatch.NotifyLiquidMassChanged(__state.Shuttle);
+
+            __result -= accepted;
+        }
+
+        // Prepare the Tanks for another receiving cycle
+        private void OnShuttleTick()
+        {
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
+            AdjacentNetworks = ShuttleWaterSearch.CheckCellsAroundShuttle(shuttle);
+
+            if (AdjacentNetworks.Count <= 0)
+                return;
 
             if (shuttle.TankA.Content == StoredType.Water)
             {
@@ -49,14 +214,21 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static void OnTransferTick(HeavyLiquidShuttle shuttle)
+        // Method to find a "Valid Net", a network that's connected and isn't currently pushing to the Shuttle
+        private void OnTransferTick()
         {
-            if (!AdjacentNetworks.TryGetValue(shuttle, out HashSet<PlumbingNet> nets))
+            if (shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
+            if (AdjacentNetworks.Count <= 0)
                 return;
 
             PlumbingNet? validNet = null;
 
-            foreach (PlumbingNet net in nets)
+            foreach (PlumbingNet net in AdjacentNetworks)
             {
                 foreach (CompWaterStorage storage in net.WaterTowers)
                 {
@@ -74,17 +246,16 @@ namespace HeavyLiquidShuttleMod
             if (validNet == null)
                 return;
 
-            TransferToTank(shuttle, validNet);
+            TransferTank(shuttle.TankA, validNet);
+            TransferTank(shuttle.TankB, validNet);
         }
 
-        private static void TransferToTank(HeavyLiquidShuttle shuttle, PlumbingNet net)
+        // Method to actually perform the transfer and validate the transfer request
+        private void TransferTank(TankState tank, PlumbingNet net)
         {
-            TransferTank(shuttle, shuttle.TankA, net);
-            TransferTank(shuttle, shuttle.TankB, net);
-        }
+            if (tank.IsLocked)
+                return;
 
-        private static void TransferTank(HeavyLiquidShuttle shuttle, TankState tank, PlumbingNet net)
-        {
             if (tank.Content != StoredType.Water)
                 return;
 
@@ -123,9 +294,10 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        private static IEnumerable<Gizmo> AddGizmos(HeavyLiquidShuttle shuttle)
+        // Gizmos for enabling transfer of water from Shuttle Tanks
+        private IEnumerable<Gizmo> AddGizmos()
         {
-            if (AdjacentNetworks.ContainsKey(shuttle))
+            if (AdjacentNetworks.Count > 0)
             {
                 if (shuttle.TankA.Content == StoredType.Water && shuttle.TankA.TankStorage > 0f)
                 {
