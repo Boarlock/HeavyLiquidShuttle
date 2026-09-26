@@ -16,35 +16,6 @@ namespace HeavyLiquidShuttleMod
     public class RimefellerIntegration : LiquidIntegrationSingle<PipelineNet>
     {
         private static readonly HashSet<RimefellerIntegration> Instances = new HashSet<RimefellerIntegration>();
-        protected override StoredType LiquidType => StoredType.Oil;
-        protected override HashSet<PipelineNet> FindAdjacentNetworks()
-        {
-            return ShuttleOilSearch.CheckCellsAroundShuttle(Shuttle);
-        }
-
-        protected override void FindValidNet(out PipelineNet? validOilNet)
-        {
-            validOilNet = null;
-
-            foreach (PipelineNet net in AdjacentXNets)
-            {
-                foreach (CompStorageTank storage in net.OilStorage)
-                {
-                    if (storage.space >= 1f && !storage.DrainTank)
-                    {
-                        validOilNet = net;
-                        break;
-                    }
-                }
-                if (validOilNet != null)
-                    break;
-            }
-        }
-
-        protected override float TryPush(PipelineNet net, float amount)
-        {
-            return (float)net.PushCrude(amount);
-        }
 
         public RimefellerIntegration(HeavyLiquidShuttle shuttle) : base(shuttle)
         {
@@ -71,6 +42,62 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] Rimefeller integration loaded.");
         }
 
+        protected override StoredType LiquidType => StoredType.Oil;
+
+        protected override void FindAdjacentNetworks()
+        {
+            AdjacentXNets = ShuttleOilSearch.CheckCellsAroundShuttle(Shuttle);
+        }
+
+        protected override void FindValidNet(out PipelineNet? validOilNet, TankState tank)
+        {
+            bool alreadySupplied = false;
+            validOilNet = null;
+
+            foreach (PipelineNet net in AdjacentXNets)
+            {
+                foreach (CompStorageTank storage in net.OilStorage)
+                {
+                    if (storage.space > 0f && !storage.DrainTank)
+                    {
+                        PendingXNetsSupply.Enqueue(net);
+
+                        if (SupplyNetCounter >= 2)
+                        {
+                            // Network in Queue has become stale.
+                            PendingXNetsSupply.Dequeue();
+                            SupplyNetCounter = 0;
+                            break;
+                        }
+                        else if (PendingXNetsSupply.Count > 0 && PendingXNetsSupply.Peek() == net && !alreadySupplied)
+                        {
+                            alreadySupplied = true;
+                            PendingXNetsSupply.Dequeue();
+                            SupplyNetCounter = 0;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        protected override float TryPush(PipelineNet net, float amount)
+        {
+            return (float)net.PushCrude(amount);
+        }
+
+        private void StartOilSpill(float spilledAmount)
+        {
+            if (!Shuttle.OilConnectionAt.IsValid)
+                return;
+
+            MapComponent_Rimefeller comp = Shuttle.parent.Map.Rimefeller();
+
+            float current = comp.OilSpillGrid.ValueAt(Shuttle.OilConnectionAt);
+
+            comp.OilSpillGrid.SetAt(Shuttle.OilConnectionAt, current + spilledAmount);
+        }
+
         public static void Prefix(PipelineNet __instance, out PushCrudeState __state)
         {
             __state = new PushCrudeState();
@@ -89,7 +116,7 @@ namespace HeavyLiquidShuttleMod
             if (integration == null)
                 return;
 
-            TankState? tank = integration.Shuttle.GetTankForContent(StoredType.Oil);
+            TankState? tank = integration.Shuttle.GetTankForReceive(StoredType.Oil);
 
             if (tank == null || tank.IsLocked)
                 return;
@@ -153,18 +180,6 @@ namespace HeavyLiquidShuttleMod
             MassPatch.NotifyLiquidMassChanged(__state.Shuttle);
 
             __result -= accepted;
-        }
-
-        private void StartOilSpill(float spilledAmount)
-        {
-            if (!Shuttle.OilConnectionAt.IsValid)
-                return;
-
-            MapComponent_Rimefeller comp = Shuttle.parent.Map.Rimefeller();
-
-            float current = comp.OilSpillGrid.ValueAt(Shuttle.OilConnectionAt);
-
-            comp.OilSpillGrid.SetAt(Shuttle.OilConnectionAt, current + spilledAmount);
         }
     }
 }

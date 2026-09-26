@@ -91,18 +91,35 @@ namespace HeavyLiquidShuttleMod
         public IntVec3 OilConnectionAt {  get; set; }
 
         // Helper for returning Shuttle Tanks
-        public TankState? GetTankForContent(StoredType content)
+        public TankState? GetTankForReceive(StoredType type)
         {
-            if (TankA.Content == content && TankA.TankStorage < TankA.TankCapacity && !TankA.IsLocked)
+            if (TankA.Content == type && TankA.TankStorage < TankA.TankCapacity && !TankA.IsLocked)
                 return TankA;
 
-            if (TankB.Content == content && TankB.TankStorage < TankB.TankCapacity && !TankB.IsLocked)
+            if (TankB.Content == type && TankB.TankStorage < TankB.TankCapacity && !TankB.IsLocked)
                 return TankB;
 
             if (TankA.Content == StoredType.Empty && !TankA.IsLocked)
                 return TankA;
 
             if (TankB.Content == StoredType.Empty && !TankB.IsLocked)
+                return TankB;
+
+            return null;
+        }
+
+        public TankState? GetTankForSupply(StoredType type)
+        {
+            if (TankA.Content == StoredType.Water && type == StoredType.Water && !TankA.IsContaminated || !TankA.IsLocked)
+                return TankA;
+
+            if (TankB.Content == StoredType.Water && type == StoredType.Water && !TankB.IsContaminated || !TankB.IsLocked)
+                return TankB;
+
+            if (TankA.Content == type && TankA.TankStorage > 0f && !TankA.IsLocked)
+                return TankA;
+
+            if (TankB.Content == type && TankB.TankStorage > 0f && !TankB.IsLocked)
                 return TankB;
 
             return null;

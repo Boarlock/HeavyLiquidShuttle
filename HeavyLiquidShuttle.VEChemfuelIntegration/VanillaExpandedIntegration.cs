@@ -16,8 +16,8 @@ namespace HeavyLiquidShuttleMod
         {
             this.shuttle = shuttle;
 
-            HeavyLiquidShuttleGameComponent.TickIntegration += OnShuttleTick;
-            HeavyLiquidShuttleGameComponent.TickIntegration += OnTransferTick;
+            HeavyLiquidShuttleGameComp.TickIntegration += OnShuttleTick;
+            HeavyLiquidShuttleGameComp.TickIntegration += OnTransferTick;
             shuttle.GizmoIntegration += AddGizmos;
 
             Log.Message("[HeavyLiquidShuttle] VE shared integration loaded.");
@@ -30,8 +30,8 @@ namespace HeavyLiquidShuttleMod
             if (cleanedUp)
                 return;
 
-            HeavyLiquidShuttleGameComponent.TickIntegration -= OnShuttleTick;
-            HeavyLiquidShuttleGameComponent.TickIntegration -= OnTransferTick;
+            HeavyLiquidShuttleGameComp.TickIntegration -= OnShuttleTick;
+            HeavyLiquidShuttleGameComp.TickIntegration -= OnTransferTick;
             shuttle.GizmoIntegration -= AddGizmos;
 
             cleanedUp = true;
@@ -114,7 +114,7 @@ namespace HeavyLiquidShuttleMod
                         {
                             DeepchemSupplyingPendingNets.Enqueue(net);
                             
-                            TankState? tank = shuttle.GetTankForContent(StoredType.Deepchem);
+                            TankState? tank = shuttle.GetTankForReceive(StoredType.Deepchem);
 
                             if (tank == null)
                                 break;
@@ -177,7 +177,7 @@ namespace HeavyLiquidShuttleMod
                         {
                             HelixienSupplyingPendingNets.Enqueue(net);
 
-                            TankState? tank = shuttle.GetTankForContent(StoredType.Helixien);
+                            TankState? tank = shuttle.GetTankForReceive(StoredType.Helixien);
 
                             if (tank == null)
                                 break;

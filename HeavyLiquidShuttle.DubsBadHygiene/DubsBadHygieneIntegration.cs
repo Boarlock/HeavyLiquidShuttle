@@ -17,35 +17,6 @@ namespace HeavyLiquidShuttleMod
     public class DubsBadHygieneIntegration : LiquidIntegrationSingle<PlumbingNet>
     {
         private static readonly HashSet<DubsBadHygieneIntegration> Instances = new HashSet<DubsBadHygieneIntegration>();
-        protected override StoredType LiquidType => StoredType.Water;
-        protected override HashSet<PlumbingNet> FindAdjacentNetworks()
-        {
-            return ShuttleWaterSearch.CheckCellsAroundShuttle(Shuttle);
-        }
-
-        protected override void FindValidNet(out PlumbingNet? validWaterNet)
-        {
-            validWaterNet = null;
-
-            foreach (PlumbingNet net in AdjacentXNets)
-            {
-                foreach (CompWaterStorage storage in net.WaterTowers)
-                {
-                    if (storage.space >= 1f && !storage.DrainTank)
-                    {
-                        validWaterNet = net;
-                        break;
-                    }
-                }
-                if (validWaterNet != null)
-                    break;
-            }
-        }
-
-        protected override float TryPush(PlumbingNet net, float amount)
-        {
-            return net.PushWater(amount);
-        }
 
         public DubsBadHygieneIntegration(HeavyLiquidShuttle shuttle) : base(shuttle)
         {
@@ -70,6 +41,49 @@ namespace HeavyLiquidShuttleMod
             Log.Message("[HeavyLiquidShuttle] Dubs Bad Hygiene integration loaded.");
         }
 
+        protected override StoredType LiquidType => StoredType.Water;
+        protected override void FindAdjacentNetworks()
+        {
+            AdjacentXNets = ShuttleWaterSearch.CheckCellsAroundShuttle(Shuttle);
+        }
+
+        protected override void FindValidNet(out PlumbingNet? validWaterNet, TankState tank)
+        {
+            bool alreadySupplied = false;
+            validWaterNet = null;
+
+            foreach (PlumbingNet net in AdjacentXNets)
+            {
+                foreach (CompWaterStorage storage in net.WaterTowers)
+                {
+                    if (storage.space > 0f && !storage.DrainTank)
+                    {
+                        PendingXNetsSupply.Enqueue(net);
+
+                        if (SupplyNetCounter >= 2)
+                        {
+                            // Network in Queue has become stale.
+                            PendingXNetsSupply.Dequeue();
+                            SupplyNetCounter = 0;
+                            break;
+                        }
+                        else if (PendingXNetsSupply.Count > 0 && PendingXNetsSupply.Peek() == net && !alreadySupplied)
+                        {
+                            alreadySupplied = true;
+                            PendingXNetsSupply.Dequeue();
+                            SupplyNetCounter = 0;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        protected override float TryPush(PlumbingNet net, float amount)
+        {
+            return net.PushWater(amount);
+        }
+
         public static void Prefix(PlumbingNet __instance, out PushWaterState __state)
         {
             __state = new PushWaterState();
@@ -88,7 +102,7 @@ namespace HeavyLiquidShuttleMod
             if (integration == null)
                 return;
 
-            TankState? tank = integration.Shuttle.GetTankForContent(StoredType.Water);
+            TankState? tank = integration.Shuttle.GetTankForReceive(StoredType.Water);
 
             if (tank == null || tank.IsLocked)
                 return;
@@ -136,10 +150,10 @@ namespace HeavyLiquidShuttleMod
             if (__state.Integration.PendingXNetsReceive.Count > 0)
             {
 
-                if (__state.Tank.Counter >= 2)
+                if (__state.Integration.ReceiveNetCounter >= 2)
                 {
                     __state.Integration.PendingXNetsReceive.Dequeue();
-                    __state.Tank.Counter = 0;
+                    __state.Integration.ReceiveNetCounter = 0;
 
                     return;
                 }
@@ -150,7 +164,7 @@ namespace HeavyLiquidShuttleMod
                 __state.Integration.PendingXNetsReceive.Dequeue();
             }
 
-            __state.Tank.Counter = 0;
+            __state.Integration.ReceiveNetCounter = 0;
 
             float freeCapacity = __state.Tank.TankCapacity - __state.Tank.TankStorage;
 
