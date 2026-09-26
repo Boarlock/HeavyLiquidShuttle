@@ -40,8 +40,10 @@ namespace HeavyLiquidShuttleMod
         // HashSets for all adjacent network next to the shuttle and HashSetQueues for networks waiting to give content to the Shuttle
         private HashSet<PipeNet> DeepchemNetworks = new HashSet<PipeNet>();
         private HashSet<PipeNet> HelixienNetworks = new HashSet<PipeNet>();
-        private HashSetQueue<PipeNet> DeepchemPendingNets = new HashSetQueue<PipeNet>();
-        private HashSetQueue<PipeNet> HelixienPendingNets = new HashSetQueue<PipeNet>();
+        private HashSetQueue<PipeNet> DeepchemSupplyingPendingNets = new HashSetQueue<PipeNet>();
+        private HashSetQueue<PipeNet> HelixienSupplyingPendingNets = new HashSetQueue<PipeNet>();
+        private HashSetQueue<PipeNet> DeepchemReceivingPendingNets = new HashSetQueue<PipeNet>();
+        private HashSetQueue<PipeNet> HelixienReceivingPendingNets = new HashSetQueue<PipeNet>();
 
         // Static field gathered through reflection for VE's markedForTransfer field and helper method to get it
         private static readonly FieldInfo MarkedForTransferField = typeof(PipeNet).GetField("markedForTransfer", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -110,26 +112,26 @@ namespace HeavyLiquidShuttleMod
                     {
                         if (storage.AmountStored > 1f)
                         {
-                            DeepchemPendingNets.Enqueue(net);
+                            DeepchemSupplyingPendingNets.Enqueue(net);
                             
                             TankState? tank = shuttle.GetTankForContent(StoredType.Deepchem);
 
                             if (tank == null)
                                 break;
 
-                            if (DeepchemPendingNets.Count > 0 && DeepchemPendingNets.Peek() == net && !alreadySupplied)
+                            if (DeepchemSupplyingPendingNets.Count > 0 && DeepchemSupplyingPendingNets.Peek() == net && !alreadySupplied)
                             {
                                 TransferFromNetwork(tank, net, type, sourceStorages);
 
                                 alreadySupplied = true;
-                                DeepchemPendingNets.Dequeue();
+                                DeepchemSupplyingPendingNets.Dequeue();
                                 tank.Counter2 = 0;
                                 break;
                             }
                             else if (tank.Counter2 >= 2)
                             {
                                 // Network in Queue has become stale.
-                                DeepchemPendingNets.Dequeue();
+                                DeepchemSupplyingPendingNets.Dequeue();
                                 tank.Counter2 = 0;
                             }
                         }
@@ -173,26 +175,26 @@ namespace HeavyLiquidShuttleMod
                     {
                         if (storage.AmountStored > 1f)
                         {
-                            HelixienPendingNets.Enqueue(net);
+                            HelixienSupplyingPendingNets.Enqueue(net);
 
                             TankState? tank = shuttle.GetTankForContent(StoredType.Helixien);
 
                             if (tank == null)
                                 break;
 
-                            if (HelixienPendingNets.Count > 0 && HelixienPendingNets.Peek() == net && !alreadySupplied)
+                            if (HelixienSupplyingPendingNets.Count > 0 && HelixienSupplyingPendingNets.Peek() == net && !alreadySupplied)
                             {
                                 TransferFromNetwork(tank, net, type, sourceStorages);
 
                                 alreadySupplied = true;
-                                HelixienPendingNets.Dequeue();
+                                HelixienSupplyingPendingNets.Dequeue();
                                 tank.Counter2 = 0;
                                 break;
                             }
                             else if (tank.Counter2 >= 2)
                             {
                                 // Network in Queue has become stale.
-                                HelixienPendingNets.Dequeue();
+                                HelixienSupplyingPendingNets.Dequeue();
                                 tank.Counter2 = 0;
                             }
                         }
