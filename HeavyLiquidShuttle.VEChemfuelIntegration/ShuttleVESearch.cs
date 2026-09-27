@@ -50,13 +50,9 @@ namespace HeavyLiquidShuttleMod
                         continue;
 
                     if (pipe.Resource.name == "Deepchem")
-                    {
                         deepchemNets.Add(pipe.PipeNet);
-                    }
                     else if (pipe.Resource.name == "Helixien gas")
-                    {
                         helixienNets.Add(pipe.PipeNet);
-                    }
 
                     break;
                 }

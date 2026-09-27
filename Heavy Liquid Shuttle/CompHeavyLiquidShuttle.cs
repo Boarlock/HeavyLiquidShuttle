@@ -89,7 +89,7 @@ namespace HeavyLiquidShuttleMod
         // Used for placing Oil Spills from Rimefeller
         public IntVec3 OilConnectionAt {  get; set; }
 
-        // Helper for returning Shuttle Tanks
+        // Helpers for returning Shuttle Tanks
         public TankState? GetTankForReceive(StoredType type)
         {
             if (!TankA.IsLocked)
@@ -109,10 +109,8 @@ namespace HeavyLiquidShuttleMod
                 if (TankB.Content == StoredType.Empty)
                     return TankB;
             }
-
             return null;
         }
-
         public TankState? GetTankForSupply(StoredType type)
         {
             if (!TankA.IsLocked)
@@ -269,6 +267,52 @@ namespace HeavyLiquidShuttleMod
                         yield return gizmo;
                 }
             }
+        }
+
+        public static Gizmo? CreateDischargeGizmo(HeavyLiquidShuttle shuttle, string tank, StoredType type)
+        {
+            if (tank == "Tank A")
+            {
+                return new Command_Toggle
+                {
+                    defaultLabel = "Discharge " + type,
+                    defaultDesc = tank + ": Discharge into an adjacent " + type + " network.",
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Unload" + type),
+                    isActive = () =>
+                    {
+                        return shuttle.TankA.TransferEnabled;
+                    },
+                    toggleAction = () =>
+                    {
+                        if (shuttle.TankA.TankStorage <= 0f)
+                            return;
+
+                        shuttle.ToggleTransfer(shuttle.TankA);
+                    }
+                };
+            }
+
+            else if (tank == "Tank B")
+            {
+                return new Command_Toggle
+                {
+                    defaultLabel = "Discharge " + type,
+                    defaultDesc = tank + ": Discharge into an adjacent " + type + " network.",
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Unload" + type),
+                    isActive = () =>
+                    {
+                        return shuttle.TankB.TransferEnabled;
+                    },
+                    toggleAction = () =>
+                    {
+                        if (shuttle.TankB.TankStorage <= 0f)
+                            return;
+
+                        shuttle.ToggleTransfer(shuttle.TankB);
+                    }
+                };
+            }
+            return null;
         }
 
         // Displays tank contents

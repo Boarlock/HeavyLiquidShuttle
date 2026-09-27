@@ -1,4 +1,4 @@
-﻿/*using PipeSystem;
+﻿using PipeSystem;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -6,377 +6,124 @@ using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
-    public class VanillaExpandedIntegration
+    public class VanillaExpandedIntegration : LiquidIntegrationDouble<PipeNet, CompResourceStorage, PipeNet, CompResourceStorage>
     {
-        // shuttle specific to this instance of DBH Integration
-        private readonly HeavyLiquidShuttle shuttle;
+        public VanillaExpandedIntegration(HeavyLiquidShuttle shuttle) : base(shuttle) { }
+        protected override StoredType LiquidTypeX => StoredType.Deepchem;
+        protected override StoredType LiquidTypeY => StoredType.Helixien;
+        protected override void FindAdjacentNetworks() { }
 
-        // Constructor that registers tick events and Gizmo function from CompHeavyLiquidShuttle
-        public VanillaExpandedIntegration(HeavyLiquidShuttle shuttle)
-        {
-            this.shuttle = shuttle;
-
-            HeavyLiquidShuttleGameComp.TickIntegration += OnShuttleTick;
-            HeavyLiquidShuttleGameComp.TickIntegration += OnTransferTick;
-            shuttle.GizmoIntegration += AddGizmos;
-
-            Log.Message("[HeavyLiquidShuttle] VE shared integration loaded.");
-        }
-
-        // Cleanup method when the Shuttle is destroyed to let all subscribers of the Tick events to unsubscribe themselves
-        private bool cleanedUp;
-        private void Cleanup()
-        {
-            if (cleanedUp)
-                return;
-
-            HeavyLiquidShuttleGameComp.TickIntegration -= OnShuttleTick;
-            HeavyLiquidShuttleGameComp.TickIntegration -= OnTransferTick;
-            shuttle.GizmoIntegration -= AddGizmos;
-
-            cleanedUp = true;
-        }
-
-        // HashSets for all adjacent network next to the shuttle and HashSetQueues for networks waiting to give content to the Shuttle
-        private HashSet<PipeNet> DeepchemNetworks = new HashSet<PipeNet>();
-        private HashSet<PipeNet> HelixienNetworks = new HashSet<PipeNet>();
-        private HashSetQueue<PipeNet> DeepchemSupplyingPendingNets = new HashSetQueue<PipeNet>();
-        private HashSetQueue<PipeNet> HelixienSupplyingPendingNets = new HashSetQueue<PipeNet>();
-        private HashSetQueue<PipeNet> DeepchemReceivingPendingNets = new HashSetQueue<PipeNet>();
-        private HashSetQueue<PipeNet> HelixienReceivingPendingNets = new HashSetQueue<PipeNet>();
-
-        // Static field gathered through reflection for VE's markedForTransfer field and helper method to get it
+        // Static fields gathered through reflection for VE's markedForTransfer/amountStored fields and helpers get/set them
         private static readonly FieldInfo MarkedForTransferField = typeof(PipeNet).GetField("markedForTransfer", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo AmountStoredField = typeof(CompResourceStorage).GetField("amountStored", BindingFlags.Instance | BindingFlags.NonPublic);
+
         private List<CompResourceStorage> GetMarkedForTransfer(PipeNet net)
         {
             return (List<CompResourceStorage>)MarkedForTransferField.GetValue(net);
         }
-
-        // Only thing to do for VE is to check around the shuttle or call Cleanup if the Shuttle is Destroyed
-        private void OnShuttleTick()
+        private void SetAmountStored(CompResourceStorage storage, float value)
         {
-            if (shuttle.parent.Destroyed)
-                Cleanup();
-
-            if (cleanedUp)
-                return;
-
-            ShuttleVESearch.CheckCellsAroundShuttle(shuttle, out DeepchemNetworks, out HelixienNetworks);
+            AmountStoredField.SetValue(storage, value);
         }
 
-        // Method to find "Valid Nets", networks that are connected and aren't currently pushing to the Shuttle
-        // This method also handles queueing for receiving network and calling of the method responsible
-        private void OnTransferTick()
+        protected override void FindAdjacentNetworksDouble(
+            out HashSet<PipeNet> AdjacentXNets,
+            out HashSet<PipeNet> AdjacentYNets)
+
+            => ShuttleVESearch.CheckCellsAroundShuttle(Shuttle,
+                out AdjacentXNets,
+                out AdjacentYNets);
+
+        protected override void FindValidStoragesX(
+            out CompResourceStorage? validSupplyStorage,
+            out CompResourceStorage? validReceivingStorage)
         {
-            if (shuttle.parent.Destroyed)
-                Cleanup();
 
-            if (cleanedUp)
-                return;
+            SupplyStorageCandidatesX.Clear();
+            ReceiveStorageCandidatesX.Clear();
 
-            StoredType type;
-            PipeNet? validNet = null;
-            bool alreadySupplied = false;
-            bool foundValidNet = false;
-
-            if (shuttle.TankA.Counter2 < 2)
-                shuttle.TankA.Counter2++;
-
-            if (shuttle.TankB.Counter2 < 2)
-                shuttle.TankB.Counter2++;
-
-            // Deepchem logic
-            if (DeepchemNetworks.Count > 0)
+            foreach (PipeNet net in AdjacentXNets)
             {
-                type = StoredType.Deepchem;
+                List<CompResourceStorage> sourceStorages = GetMarkedForTransfer(net);
 
-                foreach (PipeNet net in DeepchemNetworks)
+                // Storages here are not marked for transfer and are valid receivers of the Shuttle
+                foreach (CompResourceStorage storage in net.storages)
                 {
-                    List<CompResourceStorage> sourceStorages = GetMarkedForTransfer(net);
-
-                    // Storages willing to receive.
-                    foreach (CompResourceStorage storage in net.storages)
-                    {
-                        if (storage.AmountCanAccept >= 1f && !storage.markedForTransfer && !foundValidNet)
-                        {
-                            validNet = net;
-                            foundValidNet = true;
-                            break;
-                        }
-
-                        if (foundValidNet == true)
-                            break;
-                    }
-                    // Storages marked for transfer.
-                    foreach (CompResourceStorage storage in sourceStorages)
-                    {
-                        if (storage.AmountStored > 1f)
-                        {
-                            DeepchemSupplyingPendingNets.Enqueue(net);
-                            
-                            TankState? tank = shuttle.GetTankForReceive(StoredType.Deepchem);
-
-                            if (tank == null)
-                                break;
-
-                            if (DeepchemSupplyingPendingNets.Count > 0 && DeepchemSupplyingPendingNets.Peek() == net && !alreadySupplied)
-                            {
-                                TransferFromNetwork(tank, net, type, sourceStorages);
-
-                                alreadySupplied = true;
-                                DeepchemSupplyingPendingNets.Dequeue();
-                                tank.Counter2 = 0;
-                                break;
-                            }
-                            else if (tank.Counter2 >= 2)
-                            {
-                                // Network in Queue has become stale.
-                                DeepchemSupplyingPendingNets.Dequeue();
-                                tank.Counter2 = 0;
-                            }
-                        }
-                    }
+                    if (storage.AmountCanAccept > 0f && !storage.markedForTransfer)
+                        ReceiveStorageCandidatesX.Add(storage);
                 }
-                if (validNet != null)
+
+                // Storages here are marked for transfer and are valid suppliers to the Shuttle
+                foreach (CompResourceStorage storage in sourceStorages)
                 {
-                    TransferToTank(shuttle.TankA, validNet, type);
-                    TransferToTank(shuttle.TankB, validNet, type);
+                    if (storage.AmountStored > 0f)
+                        SupplyStorageCandidatesX.Add(storage);
                 }
             }
 
-            validNet = null;
-            alreadySupplied = false;
-            foundValidNet = false;
-
-            // Helixien logic
-            if (HelixienNetworks.Count > 0)
-            {
-                type = StoredType.Helixien;
-
-                foreach (PipeNet net in HelixienNetworks)
-                {
-                    List<CompResourceStorage> sourceStorages = GetMarkedForTransfer(net);
-
-                    // Storages willing to receive.
-                    foreach (CompResourceStorage storage in net.storages)
-                    {
-                        if (storage.AmountCanAccept >= 1f && !storage.markedForTransfer && !foundValidNet)
-                        {
-                            validNet = net;
-                            foundValidNet = true;
-                            break;
-                        }
-
-                        if (foundValidNet == true)
-                            break;
-                    }
-                    // Storages marked for transfer.
-                    foreach (CompResourceStorage storage in sourceStorages)
-                    {
-                        if (storage.AmountStored > 1f)
-                        {
-                            HelixienSupplyingPendingNets.Enqueue(net);
-
-                            TankState? tank = shuttle.GetTankForReceive(StoredType.Helixien);
-
-                            if (tank == null)
-                                break;
-
-                            if (HelixienSupplyingPendingNets.Count > 0 && HelixienSupplyingPendingNets.Peek() == net && !alreadySupplied)
-                            {
-                                TransferFromNetwork(tank, net, type, sourceStorages);
-
-                                alreadySupplied = true;
-                                HelixienSupplyingPendingNets.Dequeue();
-                                tank.Counter2 = 0;
-                                break;
-                            }
-                            else if (tank.Counter2 >= 2)
-                            {
-                                // Network in Queue has become stale.
-                                HelixienSupplyingPendingNets.Dequeue();
-                                tank.Counter2 = 0;
-                            }
-                        }
-                    }
-
-                }
-                if (validNet != null)
-                {
-                    TransferToTank(shuttle.TankA, validNet, type);
-                    TransferToTank(shuttle.TankB, validNet, type);
-                }
-            }
+            StorageSelectX(
+                out validSupplyStorage,
+                out validReceivingStorage);
         }
 
-        // Method to actually perform the transfer from a Shuttle Tank to deepchem/helixien tanks (storages) and validate the transfer request
-        private void TransferToTank(TankState tank, PipeNet net, StoredType type)
+        protected override void FindValidStoragesY(
+            out CompResourceStorage? validSupplyStorage,
+            out CompResourceStorage? validReceivingStorage)
         {
-            if (tank.IsLocked)
-                return;
 
-            if (tank.TankStorage <= 0f)
-                return;
+            SupplyStorageCandidatesY.Clear();
+            ReceiveStorageCandidatesY.Clear();
 
-            if (tank.IsTransferringFluid)
-                return;
-
-            if (!tank.TransferEnabled)
-                return;
-
-            if (net == null)
-                return;
-
-            if (tank.Content != type)
-                return;
-
-            float amount = Mathf.Min(tank.TankStorage, 1f);
-
-            tank.IsTransferringFluid = true;
-
-            try
+            foreach (PipeNet net in AdjacentYNets)
             {
-                net.DistributeAmongStorage(amount, out float transferred);
-                tank.TankStorage = Mathf.Max(0f, tank.TankStorage - transferred);
-            }
-            finally
-            {
-                tank.IsTransferringFluid = false;
+                List<CompResourceStorage> sourceStorages = GetMarkedForTransfer(net);
 
-                if (tank.TankStorage <= 0f)
+                // Storages here are not marked for transfer and are valid receivers of the Shuttle
+                foreach (CompResourceStorage storage in net.storages)
                 {
-                    tank.TankStorage = 0f;
-                    tank.Content = StoredType.Empty;
-                    tank.TransferEnabled = false;
+                    if (storage.AmountCanAccept > 0f && !storage.markedForTransfer)
+                        ReceiveStorageCandidatesY.Add(storage);
+                }
+
+                // Storages here are marked for transfer and are valid suppliers to the Shuttle
+                foreach (CompResourceStorage storage in sourceStorages)
+                {
+                    if (storage.AmountStored > 0f)
+                        SupplyStorageCandidatesY.Add(storage);
                 }
             }
+
+            StorageSelectY(
+                out validSupplyStorage,
+                out validReceivingStorage);
         }
 
-        // Method to actually perform the transfer from deepchem/helixien tanks (storages) to a Shuttle Tank
-        private void TransferFromNetwork(TankState tank, PipeNet net, StoredType type, List<CompResourceStorage> sourceStorages)
+        protected override float ModifyStorageX(CompResourceStorage storage, float amount, bool addTo)
         {
-            if (tank.IsLocked)
-                return;
-
-            if (tank.IsTransferringFluid)
-                return;
-
-            if (tank.Content != StoredType.Empty && tank.Content != type)
-                return;
-
-            float freeCapacity = tank.TankCapacity - tank.TankStorage;
-
-            if (freeCapacity <= 0f)
-                return;
-
-            float amount = Mathf.Min(freeCapacity, 1f);
-
-            tank.IsTransferringFluid = true;
-
-            try
+            if (addTo)
             {
-                net.DrawAmongStorage(amount, out float drawn, sourceStorages, false);
-
-                if (drawn <= 0f)
-                    return;
-
-                tank.Content = type;
-                tank.TankStorage += drawn;
-
+                float transferred = Mathf.Min(amount, storage.AmountCanAccept);
+                SetAmountStored(storage, storage.AmountStored + transferred);
+                return transferred;
             }
-            finally
-            {
-                tank.IsTransferringFluid = false;
-            }
+
+            float removed = Mathf.Min(amount, storage.AmountStored);
+            SetAmountStored(storage, storage.AmountStored - removed);
+            return removed;
         }
 
-        // Gizmos for enabling transfer of deepchem and helixien from Shuttle Tanks
-        private IEnumerable<Gizmo> AddGizmos()
+        protected override float ModifyStorageY(CompResourceStorage storage, float amount, bool addTo)
         {
-            if (DeepchemNetworks.Count > 0 || HelixienNetworks.Count > 0)
+            if (addTo)
             {
-                if (shuttle.TankA.Content == StoredType.Deepchem && shuttle.TankA.TankStorage > 0f)
-                {
-                    yield return new Command_Toggle
-                    {
-                        defaultLabel = "Discharge Deepchem",
-                        defaultDesc = "Tank A: Discharge into an adjacent deepchem chemfuel network.",
-                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadDeepchem"),
-                        isActive = () =>
-                        {
-                            return shuttle.TankA.TransferEnabled;
-                        },
-                        toggleAction = () =>
-                        {
-                            if (shuttle.TankA.TankStorage <= 0f)
-                                return;
-
-                            shuttle.ToggleTransfer(shuttle.TankA);
-                        }
-                    };
-                }
-                else if (shuttle.TankA.Content == StoredType.Helixien && shuttle.TankA.TankStorage > 0f)
-                {
-                    yield return new Command_Toggle
-                    {
-                        defaultLabel = "Discharge Helixien",
-                        defaultDesc = "Tank A: Discharge into an adjacent helixien gas network.",
-                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadHelixien"),
-                        isActive = () =>
-                        {
-                            return shuttle.TankA.TransferEnabled;
-                        },
-                        toggleAction = () =>
-                        {
-                            if (shuttle.TankA.TankStorage <= 0f)
-                                return;
-
-                            shuttle.ToggleTransfer(shuttle.TankA);
-                        }
-                    };
-                }
-
-                if (shuttle.TankB.Content == StoredType.Deepchem && shuttle.TankB.TankStorage > 0f)
-                {
-                    yield return new Command_Toggle
-                    {
-                        defaultLabel = "Discharge Deepchem",
-                        defaultDesc = "Tank B: Discharge into an adjacent deepchem chemfuel network.",
-                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadDeepchem"),
-                        isActive = () =>
-                        {
-                            return shuttle.TankB.TransferEnabled;
-                        },
-                        toggleAction = () =>
-                        {
-                            if (shuttle.TankB.TankStorage <= 0f)
-                                return;
-
-                            shuttle.ToggleTransfer(shuttle.TankB);
-                        }
-                    };
-                }
-                else if (shuttle.TankB.Content == StoredType.Helixien && shuttle.TankB.TankStorage > 0f)
-                {
-                    yield return new Command_Toggle
-                    {
-                        defaultLabel = "Discharge Helixien",
-                        defaultDesc = "Tank B: Discharge into an adjacent helixien gas network.",
-                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadHelixien"),
-                        isActive = () =>
-                        {
-                            return shuttle.TankB.TransferEnabled;
-                        },
-                        toggleAction = () =>
-                        {
-                            if (shuttle.TankB.TankStorage <= 0f)
-                                return;
-
-                            shuttle.ToggleTransfer(shuttle.TankB);
-                        }
-                    };
-                }
+                float transferred = Mathf.Min(amount, storage.AmountCanAccept);
+                SetAmountStored(storage, storage.AmountStored + transferred);
+                return transferred;
             }
+
+            float removed = Mathf.Min(amount, storage.AmountStored);
+            SetAmountStored(storage, storage.AmountStored - removed);
+            return removed;
         }
     }
-}*/
+}
