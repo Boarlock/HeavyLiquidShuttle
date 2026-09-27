@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Verse;
 
 namespace HeavyLiquidShuttleMod
@@ -8,13 +9,20 @@ namespace HeavyLiquidShuttleMod
     {
         public HeavyLiquidShuttleGameComp(Game game) { }
 
+        private Stopwatch stopwatch = new Stopwatch();
         public static event Action? TickIntegration;
         public override void GameComponentTick()
         {
-            if (Find.TickManager.TicksGame % 10 != 0)
-                return;
+            if (Find.TickManager.CurTimeSpeed == TimeSpeed.Paused)
+                stopwatch.Stop();
+            else
+                stopwatch.Start();
 
-            TickIntegration?.Invoke();
+            if (stopwatch.ElapsedMilliseconds >= 166.67)
+            {
+                stopwatch.Restart();
+                TickIntegration?.Invoke();
+            }
         }
     }
 
@@ -32,17 +40,17 @@ namespace HeavyLiquidShuttleMod
         public float TankCapacity = 1250f;
         public float TankStorage = 0f;
 
-        public int Counter = 0;
-        public int Counter2 = 0;
         public bool IsLocked;
         public bool TransferEnabled;
         public bool IsContaminated = false;
-        public bool IsTransferringFluid;
-        public double ReceiveAllowance = 1.0;
+
+        public float SupplyAllowance = 1f;
+        public float ReceiveAllowance = 1f;
+
         public StoredType Content = StoredType.Empty;
     }
 
-    public static class HeavyLiquidShuttleManager 
+    public static class HeavyLiquidShuttleManager
     {
         internal static bool IsInitialized = false;
 
@@ -53,7 +61,7 @@ namespace HeavyLiquidShuttleMod
 
         internal static void OnApplicationFocusChanged(bool hasFocus)
         {
-            if (!IsInitialized)
+            if (!IsInitialized || Current.ProgramState != ProgramState.Playing)
                 return;
 
             if (hasFocus)
@@ -71,16 +79,7 @@ namespace HeavyLiquidShuttleMod
                         continue;
 
                     shuttle.TankA.TransferEnabled = false;
-                    shuttle.TankA.IsTransferringFluid = false;
-                    shuttle.TankA.ReceiveAllowance = 1.0;
-                    shuttle.TankA.Counter = 0;
-                    shuttle.TankA.Counter2 = 0;
-
                     shuttle.TankB.TransferEnabled = false;
-                    shuttle.TankB.IsTransferringFluid = false;
-                    shuttle.TankB.ReceiveAllowance = 1.0;
-                    shuttle.TankB.Counter = 0;
-                    shuttle.TankA.Counter2 = 0;
                 }
             }
         }

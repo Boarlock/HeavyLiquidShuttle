@@ -38,6 +38,7 @@ namespace HeavyLiquidShuttleMod
 
             if (dbhActive && rimefellerActive && LibraryLoaders.DubwiseSharedIntegrationType != null)
             {
+                Log.Message($"[HLS-Debug] {GetType().Name}: CREATED shuttle={this.parent?.LabelCap}");
                 sharedIntegration = Activator.CreateInstance(LibraryLoaders.DubwiseSharedIntegrationType, this);
             }
             else if (dbhActive && LibraryLoaders.DBHIntegrationType != null)
@@ -56,8 +57,6 @@ namespace HeavyLiquidShuttleMod
 
             initialized = true;
         }
-
-        private void ShuttleDestroyedCleanup(HeavyLiquidShuttle shuttle) => shuttle.cleanedUp = true;
 
         // Integration instances
         internal object? sharedIntegration;
@@ -93,35 +92,47 @@ namespace HeavyLiquidShuttleMod
         // Helper for returning Shuttle Tanks
         public TankState? GetTankForReceive(StoredType type)
         {
-            if (TankA.Content == type && TankA.TankStorage < TankA.TankCapacity && !TankA.IsLocked)
-                return TankA;
+            if (!TankA.IsLocked)
+            {
+                if (TankA.Content == type && TankA.TankStorage < TankA.TankCapacity)
+                    return TankA;
 
-            if (TankB.Content == type && TankB.TankStorage < TankB.TankCapacity && !TankB.IsLocked)
-                return TankB;
+                if (TankA.Content == StoredType.Empty)
+                    return TankA;
+            }
 
-            if (TankA.Content == StoredType.Empty && !TankA.IsLocked)
-                return TankA;
+            if (!TankB.IsLocked)
+            {
+                if (TankB.Content == type && TankB.TankStorage < TankB.TankCapacity)
+                    return TankB;
 
-            if (TankB.Content == StoredType.Empty && !TankB.IsLocked)
-                return TankB;
+                if (TankB.Content == StoredType.Empty)
+                    return TankB;
+            }
 
             return null;
         }
 
         public TankState? GetTankForSupply(StoredType type)
         {
-            if (TankA.Content == StoredType.Water && type == StoredType.Water && !TankA.IsContaminated || !TankA.IsLocked)
-                return TankA;
+            if (!TankA.IsLocked)
+            {
+                if (TankA.Content == StoredType.Water && type == StoredType.Water && !TankA.IsContaminated)
+                    return TankA;
 
-            if (TankB.Content == StoredType.Water && type == StoredType.Water && !TankB.IsContaminated || !TankB.IsLocked)
-                return TankB;
+                if (TankA.Content == type && TankA.TankStorage > 0f)
+                    return TankA;
+            }
+            
+            if (!TankB.IsLocked)
+            {
+                if (TankB.Content == StoredType.Water && type == StoredType.Water && !TankB.IsContaminated)
+                    return TankB;
 
-            if (TankA.Content == type && TankA.TankStorage > 0f && !TankA.IsLocked)
-                return TankA;
-
-            if (TankB.Content == type && TankB.TankStorage > 0f && !TankB.IsLocked)
-                return TankB;
-
+                if (TankB.Content == type && TankB.TankStorage > 0f && !TankB.IsLocked)
+                    return TankB;
+            }
+            
             return null;
         }
 
@@ -219,8 +230,6 @@ namespace HeavyLiquidShuttleMod
                         TankA.Content = StoredType.Empty;
                         TankA.TankStorage = 0f;
                         TankA.TransferEnabled = false;
-                        TankA.IsTransferringFluid = false;
-                        TankA.ReceiveAllowance = 1.0;
                     }
                 };
             }
@@ -246,8 +255,6 @@ namespace HeavyLiquidShuttleMod
                         TankB.Content = StoredType.Empty;
                         TankB.TankStorage = 0f;
                         TankB.TransferEnabled = false;
-                        TankB.IsTransferringFluid = false;
-                        TankB.ReceiveAllowance = 1.0;
                     }
                 };
             }

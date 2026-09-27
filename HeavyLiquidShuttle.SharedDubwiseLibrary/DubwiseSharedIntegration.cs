@@ -1,139 +1,454 @@
 ﻿using DubsBadHygiene;
 using HarmonyLib;
 using Rimefeller;
-using System;
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEngine;
 using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
-    public class PushPatchstate : StateDouble<PlumbingNet, PipelineNet>
+    public class DubwiseSharedIntegration : LiquidIntegration<PlumbingNet, CompWaterStorage>
     {
-        public DubwiseSharedIntegration? Integration;
-
-        // To track what water storages recieved water from our shuttle if we pushed.
-        public Dictionary<CompWaterStorage, float> WaterStorages = new Dictionary<CompWaterStorage, float>();
-    }
-
-    public class DubwiseSharedIntegration : LiquidIntegrationDouble<PlumbingNet, PipelineNet>
-    {
-        // List of instances of all DBH Integrations
-        private static readonly HashSet<DubwiseSharedIntegration> Instances = new HashSet<DubwiseSharedIntegration>();
-
         // Constructor that registers tick events and Gizmo function from CompHeavyLiquidShuttle
         public DubwiseSharedIntegration(HeavyLiquidShuttle shuttle) : base(shuttle)
-        {
-            Instances.Add(this);
-            shuttle.OilSpillIntegration += StartOilSpill;
-        }
+            => shuttle.OilSpillIntegration += StartOilSpill;
 
         protected override void OnCleanup()
-        {
-            Instances.Remove(this);
-            Shuttle.OilSpillIntegration -= StartOilSpill;
-        }
+            => Shuttle.OilSpillIntegration -= StartOilSpill;
 
-        // Static constructor for all DBH instacnes to patch the relevant DBH, and Rimefeller method
-        static DubwiseSharedIntegration()
-        {
-            Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dubwiseshared");
-
-            // Method target for PushWater and PushCrude
-            MethodInfo pushWater = AccessTools.Method(typeof(PlumbingNet), nameof(PlumbingNet.PushWater));
-            MethodInfo pushOil = AccessTools.Method(typeof(PipelineNet), nameof(PipelineNet.PushCrude));
-
-            // Seperate Prefix and Postfix identifiers for both PushWater and PushCrude
-            MethodInfo waterPrefix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(WaterPrefix));
-            MethodInfo waterPostfix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(WaterPostfix));
-            MethodInfo oilPrefix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(OilPrefix));
-            MethodInfo oilPostfix = AccessTools.Method(typeof(DubwiseSharedIntegration), nameof(OilPostfix));
-
-            harmony.Patch(pushWater, prefix: new HarmonyMethod(waterPrefix), postfix: new HarmonyMethod(waterPostfix));
-            harmony.Patch(pushOil, prefix: new HarmonyMethod(oilPrefix), postfix: new HarmonyMethod(oilPostfix));
-
-            Log.Message("[HeavyLiquidShuttle] Dubwise shared integration loaded.");
-        }
+        protected override void FindAdjacentNetworks() {  }
 
         protected override StoredType LiquidType => StoredType.Empty;
-        protected override void FindAdjacentNetworks()
+        private HashSet<PipelineNet> AdjacentYNets = new HashSet<PipelineNet>();
+        private List<CompStorageTank> SupplyStorageCandidatesY = new List<CompStorageTank>();
+        private List<CompStorageTank> ReceiveStorageCandidatesY = new List<CompStorageTank>();
+
+        private CompStorageTank? LastSuppliedY;
+        private CompStorageTank? LastReceivedY;
+
+        protected override void OnShuttleTick()
         {
+            if (Shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
             ShuttleSearch.CheckCellsAroundShuttle(Shuttle, out AdjacentXNets, out AdjacentYNets);
+
+            Shuttle.TankA.ReceiveAllowance = 1f;
+            Shuttle.TankA.SupplyAllowance = 1f;
+            Shuttle.TankB.ReceiveAllowance = 1f;
+            Shuttle.TankB.SupplyAllowance = 1f;
+
+            if (AdjacentXNets.Count <= 0 && AdjacentYNets.Count <= 0)
+            {
+                SupplyStorageCandidatesX.Clear();
+                ReceiveStorageCandidatesX.Clear();
+                SupplyStorageCandidatesY.Clear();
+                ReceiveStorageCandidatesY.Clear();
+
+                LastSuppliedX = null;
+                LastReceivedX = null;
+                LastSuppliedY = null;
+                LastReceivedY = null;
+
+                return;
+            }
         }
 
-        protected override void FindValidNet(out PlumbingNet? validWaterNet, TankState tank)
+        protected override void OnTransferTick()
         {
-            bool alreadySupplied = false;
-            validWaterNet = null;
+            if (Shuttle.parent.Destroyed)
+                Cleanup();
+
+            if (cleanedUp)
+                return;
+
+            TankState? tankSupply;
+            TankState? tankReceive;
+
+            if (AdjacentXNets.Count > 0)
+            {
+                LiquidType = StoredType.Water;
+
+                FindValidStoragesX(
+                out CompWaterStorage? validSupplyStorage,
+                out CompWaterStorage? validReceiveStorage);
+
+                tankSupply = Shuttle.GetTankForSupply(LiquidType);
+                tankReceive = Shuttle.GetTankForReceive(LiquidType);
+
+                if (tankSupply != null && validSupplyStorage != null && tankSupply.SupplyAllowance > 0f)
+                    TryPush(validSupplyStorage, tankSupply);
+
+                if (tankReceive != null && validReceiveStorage != null && tankReceive.ReceiveAllowance > 0f)
+                    TryPull(validReceiveStorage, tankReceive);
+            }
+
+            if (AdjacentYNets.Count > 0)
+            {
+                LiquidType = StoredType.Oil;
+
+                FindValidStoragesY(
+                out CompStorageTank? validSupplyStorage,
+                out CompStorageTank? validReceiveStorage);
+
+                tankSupply = Shuttle.GetTankForSupply(LiquidType);
+                tankReceive = Shuttle.GetTankForReceive(LiquidType);
+
+                if (tankSupply != null && validSupplyStorage != null && tankSupply.SupplyAllowance > 0f)
+                    TryPush(validSupplyStorage, tankSupply);
+
+                if (tankReceive != null && validReceiveStorage != null && tankReceive.ReceiveAllowance > 0f)
+                    TryPull(validReceiveStorage, tankReceive);
+            }
+        }
+
+        protected override void FindValidStoragesX(
+            out CompWaterStorage? validSupplyStorage,
+            out CompWaterStorage? validReceivingStorage)
+        {
+
+            SupplyStorageCandidatesX.Clear();
+            ReceiveStorageCandidatesX.Clear();
+
+            validSupplyStorage = null;
+            validReceivingStorage = null;
+
+            int lastIndex;
+            int nextIndex;
 
             foreach (PlumbingNet net in AdjacentXNets)
             {
                 foreach (CompWaterStorage storage in net.WaterTowers)
                 {
                     if (storage.space > 0f && !storage.DrainTank)
-                    {
-                        PendingXNetsSupply.Enqueue(net);
+                        SupplyStorageCandidatesX.Add(storage);
 
-                        if (SupplyNetCounter >= 2)
-                        {
-                            // Network in Queue has become stale.
-                            PendingXNetsSupply.Dequeue();
-                            SupplyNetCounter = 0;
-                            break;
-                        }
-                        else if (PendingXNetsSupply.Count > 0 && PendingXNetsSupply.Peek() == net && !alreadySupplied)
-                        {
-                            alreadySupplied = true;
-                            PendingXNetsSupply.Dequeue();
-                            SupplyNetCounter = 0;
-                            break;
-                        }
+                    if (storage.WaterStorage > 0f && storage.DrainTank)
+                        ReceiveStorageCandidatesX.Add(storage);
+                }
+            }
+
+            // If valid supply storages exist
+            if (SupplyStorageCandidatesX.Count > 0)
+            {
+                // If this list hasn't been set yet then get the first element
+                if (LastSuppliedX == null)
+                {
+                    LastSuppliedX = SupplyStorageCandidatesX[0];
+                }
+                else
+                {
+                    lastIndex = SupplyStorageCandidatesX.IndexOf(LastSuppliedX);
+
+                    // If IndexOf is -1 then LastSupplied isn't in the current list
+                    if (lastIndex < 0)
+                    {
+                        LastSuppliedX = SupplyStorageCandidatesX[0];
+                    }
+                    else
+                    {
+                        nextIndex = lastIndex + 1;
+
+                        // If next index exceeds length of list reset to 0
+                        if (nextIndex >= SupplyStorageCandidatesX.Count)
+                            nextIndex = 0;
+
+                        LastSuppliedX = SupplyStorageCandidatesX[nextIndex];
                     }
                 }
+                validSupplyStorage = LastSuppliedX;
+            }
+
+            // If valid receive storages exist
+            if (ReceiveStorageCandidatesX.Count > 0)
+            {
+                // If this list hasn't been set yet then get the first element
+                if (LastReceivedX == null)
+                {
+                    LastReceivedX = ReceiveStorageCandidatesX[0];
+                }
+                else
+                {
+                    lastIndex = ReceiveStorageCandidatesX.IndexOf(LastReceivedX);
+
+                    // If IndexOf is -1 then LastReceived isn't in the current list
+                    if (lastIndex < 0)
+                    {
+                        LastReceivedX = ReceiveStorageCandidatesX[0];
+                    }
+                    else
+                    {
+                        nextIndex = lastIndex + 1;
+
+                        // If next index exceeds length of list reset to 0
+                        if (nextIndex >= ReceiveStorageCandidatesX.Count)
+                            nextIndex = 0;
+
+                        LastReceivedX = ReceiveStorageCandidatesX[nextIndex];
+                    }
+                }
+                validReceivingStorage = LastReceivedX;
             }
         }
 
-        protected override void FindValidNet(out PipelineNet? validOilNet, TankState tank)
+        private void FindValidStoragesY(
+            out CompStorageTank? validSupplyStorage,
+            out CompStorageTank? validReceivingStorage)
         {
-            bool alreadySupplied = false;
-            validOilNet = null;
+
+            SupplyStorageCandidatesY.Clear();
+            ReceiveStorageCandidatesY.Clear();
+
+            validSupplyStorage = null;
+            validReceivingStorage = null;
+
+            int lastIndex;
+            int nextIndex;
 
             foreach (PipelineNet net in AdjacentYNets)
             {
                 foreach (CompStorageTank storage in net.OilStorage)
                 {
                     if (storage.space > 0f && !storage.DrainTank)
-                    {
-                        PendingYNetsSupply.Enqueue(net);
+                        SupplyStorageCandidatesY.Add(storage);
 
-                        if (SupplyNetCounter >= 2)
-                        {
-                            // Network in Queue has become stale.
-                            PendingYNetsSupply.Dequeue();
-                            SupplyNetCounter = 0;
-                            break;
-                        }
-                        else if (PendingYNetsSupply.Count > 0 && PendingYNetsSupply.Peek() == net && !alreadySupplied)
-                        {
-                            alreadySupplied = true;
-                            PendingYNetsSupply.Dequeue();
-                            SupplyNetCounter = 0;
-                            break;
-                        }
+                    if (storage.Storage > 0f && storage.DrainTank)
+                        ReceiveStorageCandidatesY.Add(storage);
+                }
+            }
+
+            // If valid supply storages exist
+            if (SupplyStorageCandidatesY.Count > 0)
+            {
+                // If this list hasn't been set yet then get the first element
+                if (LastSuppliedY == null)
+                {
+                    LastSuppliedY = SupplyStorageCandidatesY[0];
+                }
+                else
+                {
+                    lastIndex = SupplyStorageCandidatesY.IndexOf(LastSuppliedY);
+
+                    // If IndexOf is -1 then LastSupplied isn't in the current list
+                    if (lastIndex < 0)
+                    {
+                        LastSuppliedY = SupplyStorageCandidatesY[0];
+                    }
+                    else
+                    {
+                        nextIndex = lastIndex + 1;
+
+                        // If next index exceeds length of list reset to 0
+                        if (nextIndex >= SupplyStorageCandidatesY.Count)
+                            nextIndex = 0;
+
+                        LastSuppliedY = SupplyStorageCandidatesY[nextIndex];
                     }
                 }
+                validSupplyStorage = LastSuppliedY;
+            }
+
+            // If valid receive storages exist
+            if (ReceiveStorageCandidatesY.Count > 0)
+            {
+                // If this list hasn't been set yet then get the first element
+                if (LastReceivedY == null)
+                {
+                    LastReceivedY = ReceiveStorageCandidatesY[0];
+                }
+                else
+                {
+                    lastIndex = ReceiveStorageCandidatesY.IndexOf(LastReceivedY);
+
+                    // If IndexOf is -1 then LastReceived isn't in the current list
+                    if (lastIndex < 0)
+                    {
+                        LastReceivedY = ReceiveStorageCandidatesY[0];
+                    }
+                    else
+                    {
+                        nextIndex = lastIndex + 1;
+
+                        // If next index exceeds length of list reset to 0
+                        if (nextIndex >= ReceiveStorageCandidatesY.Count)
+                            nextIndex = 0;
+
+                        LastReceivedY = ReceiveStorageCandidatesY[nextIndex];
+                    }
+                }
+                validReceivingStorage = LastReceivedY;
             }
         }
 
-        protected override float TryPush(PlumbingNet net, float amount)
+        protected override float ModifyStorage(CompWaterStorage storage, float amount, bool addTo)
         {
-            return net.PushWater(amount);
+            float transferred;
+
+            if (addTo)
+            {
+                transferred = Mathf.Min(amount, storage.space);
+                storage.WaterStorage += transferred;
+                return transferred;
+            }
+
+            transferred = Mathf.Min(amount, storage.WaterStorage);
+            storage.WaterStorage -= transferred;
+            return transferred;
         }
 
-        protected override float TryPush(PipelineNet net, float amount)
+        private float ModifyStorage(CompStorageTank storage, float amount, bool addTo)
         {
-            return (float)net.PushCrude(amount);
+            float transferred;
+
+            if (addTo)
+            {
+                transferred = Mathf.Min(amount, storage.space);
+                storage.Storage += transferred;
+                return transferred;
+            }
+
+            transferred = Mathf.Min(amount, (float)storage.Storage);
+            storage.Storage -= transferred;
+            return transferred;
+        }
+
+        private void TryPush(CompStorageTank storage, TankState tank)
+        {
+            if (tank.TankStorage <= 0f)
+                return;
+
+            if (!tank.TransferEnabled)
+                return;
+
+            float amount = Mathf.Min(tank.TankStorage, tank.SupplyAllowance, 1f);
+
+            if (amount <= 0f)
+                return;
+
+            float transferred = ModifyStorage(storage, amount, true);
+
+            tank.TankStorage -= transferred;
+
+            tank.SupplyAllowance -= transferred;
+            MassPatch.NotifyLiquidMassChanged(Shuttle);
+
+            if (tank.TankStorage <= 0f)
+            {
+                tank.TankStorage = 0f;
+                tank.Content = StoredType.Empty;
+                tank.TransferEnabled = false;
+            }
+        }
+
+        private void TryPull(CompStorageTank storage, TankState tank)
+        {
+            if (tank.TankStorage >= tank.TankCapacity)
+                return;
+
+            float amount = Mathf.Min(tank.TankCapacity - tank.TankStorage, tank.ReceiveAllowance, 1f);
+
+            if (amount <= 0f)
+                return;
+
+            float transferred = ModifyStorage(storage, amount, false);
+
+            if (transferred > 0f)
+                tank.Content = LiquidType;
+
+            tank.TankStorage += transferred;
+            tank.ReceiveAllowance -= transferred;
+            MassPatch.NotifyLiquidMassChanged(Shuttle);
+        }
+
+        protected override IEnumerable<Gizmo> AddGizmos()
+        {
+            if (AdjacentXNets.Count > 0 || AdjacentYNets.Count > 0)
+            {
+                if (Shuttle.TankA.Content == StoredType.Water && Shuttle.TankA.TankStorage > 0f)
+                {
+                    yield return new Command_Toggle
+                    {
+                        defaultLabel = "Discharge Water",
+                        defaultDesc = "Tank A: Discharge into an adjacent water network.",
+                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadWater"),
+                        isActive = () =>
+                        {
+                            return Shuttle.TankA.TransferEnabled;
+                        },
+                        toggleAction = () =>
+                        {
+                            if (Shuttle.TankA.TankStorage <= 0f)
+                                return;
+
+                            Shuttle.ToggleTransfer(Shuttle.TankA);
+                        }
+                    };
+                }
+                else if (Shuttle.TankA.Content == StoredType.Oil && Shuttle.TankA.TankStorage > 0f)
+                {
+                    yield return new Command_Toggle
+                    {
+                        defaultLabel = "Discharge Crude",
+                        defaultDesc = "Tank A: Discharge into an adjacent crude oil network.",
+                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadOil"),
+                        isActive = () =>
+                        {
+                            return Shuttle.TankA.TransferEnabled;
+                        },
+                        toggleAction = () =>
+                        {
+                            if (Shuttle.TankA.TankStorage <= 0f)
+                                return;
+
+                            Shuttle.ToggleTransfer(Shuttle.TankA);
+                        }
+                    };
+                }
+
+                if (Shuttle.TankB.Content == StoredType.Water && Shuttle.TankB.TankStorage > 0f)
+                {
+                    yield return new Command_Toggle
+                    {
+                        defaultLabel = "Discharge Water",
+                        defaultDesc = "Tank B: Discharge into an adjacent water network.",
+                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadWater"),
+                        isActive = () =>
+                        {
+                            return Shuttle.TankB.TransferEnabled;
+                        },
+                        toggleAction = () =>
+                        {
+                            if (Shuttle.TankB.TankStorage <= 0f)
+                                return;
+
+                            Shuttle.ToggleTransfer(Shuttle.TankB);
+                        }
+                    };
+                }
+                else if (Shuttle.TankB.Content == StoredType.Oil && Shuttle.TankB.TankStorage > 0f)
+                {
+                    yield return new Command_Toggle
+                    {
+                        defaultLabel = "Discharge Crude",
+                        defaultDesc = "Tank B: Discharge into an adjacent crude oil network.",
+                        icon = ContentFinder<Texture2D>.Get("UI/Gizmo/UnloadOil"),
+                        isActive = () =>
+                        {
+                            return Shuttle.TankB.TransferEnabled;
+                        },
+                        toggleAction = () =>
+                        {
+                            if (Shuttle.TankB.TankStorage <= 0f)
+                                return;
+
+                            Shuttle.ToggleTransfer(Shuttle.TankB);
+                        }
+                    };
+                }
+            }
         }
 
         private void StartOilSpill(float spilledAmount)
@@ -147,209 +462,6 @@ namespace HeavyLiquidShuttleMod
             float current = comp.OilSpillGrid.ValueAt(Shuttle.OilConnectionAt);
 
             comp.OilSpillGrid.SetAt(Shuttle.OilConnectionAt, current + spilledAmount);
-        }
-
-        public static void WaterPrefix(PlumbingNet __instance, out PushPatchstate __state)
-        {
-            __state = new PushPatchstate();
-
-            DubwiseSharedIntegration? integration = null;
-
-            foreach (DubwiseSharedIntegration instance in Instances)
-            {
-                if (instance.AdjacentXNets.Contains(__instance))
-                {
-                    integration = instance;
-                    break;
-                }
-            }
-
-            if (integration == null)
-                return;
-
-            TankState? tank = integration.Shuttle.GetTankForReceive(StoredType.Water);
-
-            if (tank == null || tank.IsLocked)
-                return;
-
-            __state.XInstance = __instance;
-            __state.Tank = tank;
-            __state.Shuttle = integration.Shuttle;
-            __state.Integration = integration;
-
-            foreach (CompWaterStorage waterTower in __instance.WaterTowers)
-            {
-                __state.WaterStorages[waterTower] = waterTower.WaterStorage;
-            }
-        }
-
-        public static void WaterPostfix(PushPatchstate __state, ref float __result)
-        {
-            // This PushWater call was not associated with one of our shuttles.
-            if (__state.XInstance == null || __state.Tank == null || __state.Shuttle == null || __state.Integration == null)
-                return;
-
-            // See which DBH towers actually received water from this shuttle.
-            foreach (KeyValuePair<CompWaterStorage, float> entry in __state.WaterStorages)
-            {
-
-                CompWaterStorage waterTower = entry.Key;
-                float before = entry.Value;
-
-                if (waterTower.WaterStorage > before && __state.Tank.IsContaminated && __state.Tank.IsTransferringFluid)
-                {
-                    waterTower.WaterQuality = ContaminationLevel.Contaminated;
-                }
-            }
-
-            // If DBH completely satisfied the request, nothing remains for us.
-            if (__result <= 0f)
-                return;
-
-            if (__state.Tank.IsTransferringFluid)
-                return;
-
-            if (__state.Tank.ReceiveAllowance <= 0f)
-            {
-                __state.Integration.PendingXNetsReceive.Enqueue(__state.XInstance);
-                return;
-            }
-
-            if (__state.Integration.PendingXNetsReceive.Count > 0)
-            {
-
-                // Network in Queue has become stale.
-                if (__state.Tank.Counter >= 2)
-                {
-                    __state.Integration.PendingXNetsReceive.Dequeue();
-                    __state.Tank.Counter = 0;
-
-                    return;
-                }
-
-                // Check current call against next item in the Queue
-                if (__state.Integration.PendingXNetsReceive.Peek() != __state.XInstance)
-                    return;
-
-                // This network is now being served.
-                __state.Integration.PendingXNetsReceive.Dequeue();
-            }
-
-            //Reset the Queue counter
-            __state.Tank.Counter = 0;
-
-            // Safer way to update storage so this method only gives what was taken.
-            float freeCapacity = __state.Tank.TankCapacity - __state.Tank.TankStorage;
-
-            if (freeCapacity <= 0f)
-                return;
-
-            float accepted = Mathf.Min(__result, (float)__state.Tank.ReceiveAllowance, freeCapacity);
-
-            if (accepted <= 0f)
-                return;
-
-            // Update shuttle's mass and water storage.
-            __state.Tank.Content = StoredType.Water;
-            __state.Tank.TankStorage += accepted;
-            __state.Tank.ReceiveAllowance -= accepted;
-            __state.Tank.IsContaminated = __state.XInstance.IsNetContaminated();
-
-            MassPatch.NotifyLiquidMassChanged(__state.Shuttle);
-
-            __result -= accepted;
-        }
-
-        public static void OilPrefix(PipelineNet __instance, out PushPatchstate __state)
-        {
-            __state = new PushPatchstate();
-
-            DubwiseSharedIntegration? integration = null;
-
-            foreach (DubwiseSharedIntegration instance in Instances)
-            {
-                if (instance.AdjacentYNets.Contains(__instance))
-                {
-                    integration = instance;
-                    break;
-                }
-            }
-
-            if (integration == null)
-                return;
-
-            TankState? tank = integration.Shuttle.GetTankForReceive(StoredType.Oil);
-
-            if (tank == null || tank.IsLocked)
-                return;
-
-            __state.YInstance = __instance;
-            __state.Tank = tank;
-            __state.Shuttle = integration.Shuttle;
-            __state.Integration = integration;
-        }
-
-        public static void OilPostfix(PushPatchstate __state, ref double __result)
-        {
-            // This PushCrude call was not associated with one of our shuttles.
-            if (__state.YInstance == null || __state.Tank == null || __state.Shuttle == null || __state.Integration == null)
-                return;
-
-            // If Rimefeller completely satisfied the request, nothing remains for us.
-            if (__result <= 0.0)
-                return;
-
-            if (__state.Tank.IsTransferringFluid)
-                return;
-
-            if (__state.Tank.ReceiveAllowance <= 0f)
-            {
-                __state.Integration.PendingYNetsReceive.Enqueue(__state.YInstance);
-                return;
-            }
-
-            if (__state.Integration.PendingYNetsReceive.Count > 0)
-            {
-                // Network in Queue has become stale.
-                if (__state.Tank.Counter >= 2)
-                {
-                    __state.Integration.PendingYNetsReceive.Dequeue();
-                    __state.Tank.Counter = 0;
-
-                    return;
-                }
-
-                // Check current call against next item in the Queue
-                if (__state.Integration.PendingYNetsReceive.Peek() != __state.YInstance)
-                    return;
-
-                // This network is now being served.
-                __state.Integration.PendingYNetsReceive.Dequeue();
-            }
-
-            //Reset the Queue counter
-            __state.Tank.Counter = 0;
-
-            // Safer way to update storage so this method only gives what was taken.
-            double freeCapacity = __state.Tank.TankCapacity - __state.Tank.TankStorage;
-
-            if (freeCapacity <= 0.0)
-                return;
-
-            double accepted = Math.Min(__result, Math.Min(freeCapacity, __state.Tank.ReceiveAllowance));
-
-            if (accepted <= 0.0)
-                return;
-
-            // Update shuttle's mass and oil storage.
-            __state.Tank.Content = StoredType.Oil;
-            __state.Tank.TankStorage += (float)accepted;
-            __state.Tank.ReceiveAllowance -= accepted;
-            __state.Tank.IsContaminated = true;
-
-            MassPatch.NotifyLiquidMassChanged(__state.Shuttle);
-
-            __result -= accepted;
         }
     }
 }

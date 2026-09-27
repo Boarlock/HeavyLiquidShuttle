@@ -1,189 +1,122 @@
 ﻿using DubsBadHygiene;
-using HarmonyLib;
-using System;
-using System.Collections.Generic;
-using System.Reflection;
 using UnityEngine;
-using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
-    public class PushWaterState : StateSingle<PlumbingNet>
+    public class DubsBadHygieneIntegration : LiquidIntegration<PlumbingNet, CompWaterStorage>
     {
-        public DubsBadHygieneIntegration? Integration;
-        public Dictionary<CompWaterStorage, float> WaterStorages = new Dictionary<CompWaterStorage, float>();
-    }
-
-    public class DubsBadHygieneIntegration : LiquidIntegrationSingle<PlumbingNet>
-    {
-        private static readonly HashSet<DubsBadHygieneIntegration> Instances = new HashSet<DubsBadHygieneIntegration>();
-
-        public DubsBadHygieneIntegration(HeavyLiquidShuttle shuttle) : base(shuttle)
-        {
-            Instances.Add(this);
-        }
-
-        protected override void OnCleanup()
-        {
-            Instances.Remove(this);
-        }
-
-        static DubsBadHygieneIntegration()
-        {
-            Harmony harmony = new Harmony("b0arl0ck.heavyliquidshuttle.dbh");
-
-            MethodInfo pushOil = AccessTools.Method(typeof(PlumbingNet), nameof(PlumbingNet.PushWater));
-            MethodInfo prefix = AccessTools.Method(typeof(DubsBadHygieneIntegration), nameof(Prefix));
-            MethodInfo postfix = AccessTools.Method(typeof(DubsBadHygieneIntegration), nameof(Postfix));
-
-            harmony.Patch(pushOil, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
-
-            Log.Message("[HeavyLiquidShuttle] Dubs Bad Hygiene integration loaded.");
-        }
+        public DubsBadHygieneIntegration(HeavyLiquidShuttle shuttle) : base(shuttle) {  }
 
         protected override StoredType LiquidType => StoredType.Water;
+
         protected override void FindAdjacentNetworks()
         {
             AdjacentXNets = ShuttleWaterSearch.CheckCellsAroundShuttle(Shuttle);
         }
 
-        protected override void FindValidNet(out PlumbingNet? validWaterNet, TankState tank)
+        protected override float ModifyStorage(CompWaterStorage storage, float amount, bool addTo)
         {
-            bool alreadySupplied = false;
-            validWaterNet = null;
+            float transferred = 0f;
+
+            if (addTo)
+            {
+                transferred = Mathf.Min(amount, storage.space);
+                storage.WaterStorage += transferred;
+                return transferred;
+            }
+
+            transferred = Mathf.Min(amount, storage.WaterStorage);
+            storage.WaterStorage -= transferred;
+            return transferred;
+        }
+
+        protected override void FindValidStoragesX(
+            out CompWaterStorage? validSupplyStorage,
+            out CompWaterStorage? validReceivingStorage)
+        {
+
+            SupplyStorageCandidatesX.Clear();
+            ReceiveStorageCandidatesX.Clear();
+
+            validSupplyStorage = null;
+            validReceivingStorage = null;
+
+            int lastIndex;
+            int nextIndex;
 
             foreach (PlumbingNet net in AdjacentXNets)
             {
                 foreach (CompWaterStorage storage in net.WaterTowers)
                 {
                     if (storage.space > 0f && !storage.DrainTank)
-                    {
-                        PendingXNetsSupply.Enqueue(net);
+                        SupplyStorageCandidatesX.Add(storage);
 
-                        if (SupplyNetCounter >= 2)
-                        {
-                            // Network in Queue has become stale.
-                            PendingXNetsSupply.Dequeue();
-                            SupplyNetCounter = 0;
-                            break;
-                        }
-                        else if (PendingXNetsSupply.Count > 0 && PendingXNetsSupply.Peek() == net && !alreadySupplied)
-                        {
-                            alreadySupplied = true;
-                            PendingXNetsSupply.Dequeue();
-                            SupplyNetCounter = 0;
-                            break;
-                        }
+                    if (storage.WaterStorage > 0f && storage.DrainTank)
+                        ReceiveStorageCandidatesX.Add(storage);
+                }
+            }
+
+            // If valid supply storages exist
+            if (SupplyStorageCandidatesX.Count > 0)
+            {
+                // If this list hasn't been set yet then get the first element
+                if (LastSuppliedX == null)
+                {
+                    LastSuppliedX = SupplyStorageCandidatesX[0];
+                }
+                else
+                {
+                    lastIndex = SupplyStorageCandidatesX.IndexOf(LastSuppliedX);
+
+                    // If IndexOf is -1 then LastSupplied isn't in the current list
+                    if (lastIndex < 0)
+                    {
+                        LastSuppliedX = SupplyStorageCandidatesX[0];
+                    }
+                    else
+                    {
+                        nextIndex = lastIndex + 1;
+
+                        // If next index exceeds length of list reset to 0
+                        if (nextIndex >= SupplyStorageCandidatesX.Count)
+                            nextIndex = 0;
+
+                        LastSuppliedX = SupplyStorageCandidatesX[nextIndex];
                     }
                 }
+                validSupplyStorage = LastSuppliedX;
             }
-        }
 
-        protected override float TryPush(PlumbingNet net, float amount)
-        {
-            return net.PushWater(amount);
-        }
-
-        public static void Prefix(PlumbingNet __instance, out PushWaterState __state)
-        {
-            __state = new PushWaterState();
-
-            DubsBadHygieneIntegration? integration = null;
-
-            foreach (DubsBadHygieneIntegration instance in Instances)
+            // If valid receive storages exist
+            if (ReceiveStorageCandidatesX.Count > 0)
             {
-                if (instance.AdjacentXNets.Contains(__instance))
+                // If this list hasn't been set yet then get the first element
+                if (LastReceivedX == null)
                 {
-                    integration = instance;
-                    break;
+                    LastReceivedX = ReceiveStorageCandidatesX[0];
                 }
-            }
-
-            if (integration == null)
-                return;
-
-            TankState? tank = integration.Shuttle.GetTankForReceive(StoredType.Water);
-
-            if (tank == null || tank.IsLocked)
-                return;
-
-            __state.Instance = __instance;
-            __state.Tank = tank;
-            __state.Shuttle = integration.Shuttle;
-            __state.Integration = integration;
-
-            foreach (CompWaterStorage waterTower in __instance.WaterTowers)
-            {
-                __state.WaterStorages[waterTower] = waterTower.WaterStorage;
-            }
-        }
-
-        public static void Postfix(PushWaterState __state, ref float __result)
-        {
-            if (__state.Instance == null || __state.Tank == null || __state.Shuttle == null || __state.Integration == null)
-                return;
-
-            foreach (KeyValuePair<CompWaterStorage, float> entry in __state.WaterStorages)
-            {
-
-                CompWaterStorage waterTower = entry.Key;
-                float before = entry.Value;
-
-                if (waterTower.WaterStorage > before && __state.Tank.IsContaminated && __state.Tank.IsTransferringFluid)
+                else
                 {
-                    waterTower.WaterQuality = ContaminationLevel.Contaminated;
+                    lastIndex = ReceiveStorageCandidatesX.IndexOf(LastReceivedX);
+
+                    // If IndexOf is -1 then LastReceived isn't in the current list
+                    if (lastIndex < 0)
+                    {
+                        LastReceivedX = ReceiveStorageCandidatesX[0];
+                    }
+                    else
+                    {
+                        nextIndex = lastIndex + 1;
+
+                        // If next index exceeds length of list reset to 0
+                        if (nextIndex >= ReceiveStorageCandidatesX.Count)
+                            nextIndex = 0;
+
+                        LastReceivedX = ReceiveStorageCandidatesX[nextIndex];
+                    }
                 }
+                validReceivingStorage = LastReceivedX;
             }
-
-            if (__result <= 0f)
-                return;
-
-            if (__state.Tank.IsTransferringFluid)
-                return;
-
-            if (__state.Tank.ReceiveAllowance <= 0f)
-            {
-                __state.Integration.PendingXNetsReceive.Enqueue(__state.Instance);
-                return;
-            }
-
-            if (__state.Integration.PendingXNetsReceive.Count > 0)
-            {
-
-                if (__state.Integration.ReceiveNetCounter >= 2)
-                {
-                    __state.Integration.PendingXNetsReceive.Dequeue();
-                    __state.Integration.ReceiveNetCounter = 0;
-
-                    return;
-                }
-
-                if (__state.Integration.PendingXNetsReceive.Peek() != __state.Instance)
-                    return;
-
-                __state.Integration.PendingXNetsReceive.Dequeue();
-            }
-
-            __state.Integration.ReceiveNetCounter = 0;
-
-            float freeCapacity = __state.Tank.TankCapacity - __state.Tank.TankStorage;
-
-            if (freeCapacity <= 0f)
-                return;
-
-            float accepted = Mathf.Min(__result, (float)__state.Tank.ReceiveAllowance, freeCapacity);
-
-            if (accepted <= 0f)
-                return;
-
-            __state.Tank.Content = StoredType.Water;
-            __state.Tank.TankStorage += accepted;
-            __state.Tank.ReceiveAllowance -= accepted;
-            __state.Tank.IsContaminated = __state.Instance.IsNetContaminated();
-
-            MassPatch.NotifyLiquidMassChanged(__state.Shuttle);
-
-            __result -= accepted;
         }
     }
 }
