@@ -7,61 +7,25 @@ namespace HeavyLiquidShuttleMod
 {
     public class ShuttleSearch
     {
-        public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out HashSet<PlumbingNet> waterNets, out HashSet<PipelineNet> oilNets)
+        public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out HashSet<PlumbingNet> xNets, out HashSet<PipelineNet> yNets)
         {
-            waterNets = new HashSet<PlumbingNet>();
-            oilNets = new HashSet<PipelineNet>();
-
-            if (shuttle == null)
-                return;
-
-            // Make sure the shuttle is on a non-null worldspace currently.
-            Map map = shuttle.parent.Map;
-
-            if (map == null)
-                return;
-
-            HashSet<IntVec3> adjacentTilesSet = new HashSet<IntVec3>();
-
-            // Get the cells adjacent to the shuttle.
-            foreach (IntVec3 shuttleCell in shuttle.parent.OccupiedRect())
-            {
-                foreach (IntVec3 adjCell in GenAdjFast.AdjacentCells8Way(shuttleCell))
+            ShuttleSearchDouble<PlumbingNet, PipelineNet>.CheckCellsAroundShuttle(
+                shuttle,
+                out xNets,
+                out yNets,
+                (thing, _) =>
                 {
-                    adjacentTilesSet.Add(adjCell);
-                }
-            }
+                    DubsBadHygiene.CompPipe? pipe = thing.TryGetComp<DubsBadHygiene.CompPipe>();
 
-            // Remove the shuttle cells themselves from adjacent cell list.
-            foreach (IntVec3 shuttleCell in shuttle.parent.OccupiedRect())
-            {
-                adjacentTilesSet.Remove(shuttleCell);
-            }
-
-            foreach (IntVec3 adjTile in adjacentTilesSet)
-            {
-                if (!adjTile.InBounds(map))
-                    continue;
-
-                foreach (Thing thing in map.thingGrid.ThingsAt(adjTile))
+                    return pipe?.pipeNet;
+                },
+                (thing, cell) =>
                 {
-                    DubsBadHygiene.CompPipe waterPipe = thing.TryGetComp<DubsBadHygiene.CompPipe>();
-                    Rimefeller.CompPipe oilPipe = thing.TryGetComp<Rimefeller.CompPipe>();
+                    Rimefeller.CompPipe? pipe = thing.TryGetComp<Rimefeller.CompPipe>();
 
-                    if (waterPipe?.pipeNet != null)
-                    {
-                        waterNets.Add(waterPipe.pipeNet);
-                    }
+                    return pipe?.pipeNet;
+                });
 
-                    if (oilPipe?.pipeNet != null)
-                    {
-                        oilNets.Add(oilPipe.pipeNet);
-                        shuttle.OilConnectionAt = adjTile;
-
-                    }
-                    
-                }
-            }
         }
     }
 }
