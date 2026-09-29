@@ -1,7 +1,10 @@
 ﻿using DubsBadHygiene;
 using Rimefeller;
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
+using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -75,26 +78,41 @@ namespace HeavyLiquidShuttleMod
                 out validReceiveStorage);
         }
 
-        protected override float ModifyStorageX(CompWaterStorage storage, float amount, bool addTo)
+        protected override float ModifyStorageX(CompWaterStorage storage, TankState tank, float amount, bool addTo)
         {
             float transferred;
 
+            // Adding to storage is subtracting from shuttle tanks
             if (addTo)
             {
                 transferred = Mathf.Min(amount, storage.space);
                 storage.WaterStorage += transferred;
+
+                if (transferred > 0f && storage.WaterQuality.ToString() != tank.WaterQuality.ToString())
+                    storage.WaterQuality = Enum.Parse<ContaminationLevel>(tank.WaterQuality.ToString());
+
                 return transferred;
             }
 
             transferred = Mathf.Min(amount, storage.WaterStorage);
             storage.WaterStorage -= transferred;
+
+            if (transferred <= 0f)
+                return transferred;
+
+            if (tank.IsContaminated)
+                tank.WaterQuality = WaterState.Contaminated;
+            else if (storage.WaterQuality.ToString() != tank.WaterQuality.ToString())
+                tank.WaterQuality = Enum.Parse<WaterState>(storage.WaterQuality.ToString());
+
             return transferred;
         }
 
-        protected override float ModifyStorageY(CompStorageTank storage, float amount, bool addTo)
+        protected override float ModifyStorageY(CompStorageTank storage, TankState tank, float amount, bool addTo)
         {
             float transferred;
 
+            // Adding to storage is subtracting from shuttle tanks
             if (addTo)
             {
                 transferred = Mathf.Min(amount, storage.space);
@@ -104,6 +122,10 @@ namespace HeavyLiquidShuttleMod
 
             transferred = Mathf.Min(amount, (float)storage.Storage);
             storage.Storage -= transferred;
+
+            if (transferred > 0f && !tank.IsContaminated)
+                tank.IsContaminated = true;
+
             return transferred;
         }
 

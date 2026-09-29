@@ -1,8 +1,10 @@
-﻿using System;
+﻿using RimWorld;
+using System;
 using System.Collections.Generic;
-using RimWorld;
+using System.Linq;
 using UnityEngine;
 using Verse;
+using Verse.AI;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -27,6 +29,9 @@ namespace HeavyLiquidShuttleMod
             {
                 CreateIntegrations();
             }
+
+            TankA.TransferEnabled = false;
+            TankB.TransferEnabled = false;
         }
 
         private void CreateIntegrations()
@@ -113,23 +118,11 @@ namespace HeavyLiquidShuttleMod
         }
         public TankState? GetTankForSupply(StoredType type)
         {
-            if (!TankA.IsLocked)
-            {
-                if (TankA.Content == StoredType.Water && type == StoredType.Water && !TankA.IsContaminated)
-                    return TankA;
+            if (TankA.Content == type && TankA.TankStorage > 0f && !TankA.IsLocked)
+                return TankA;
 
-                if (TankA.Content == type && TankA.TankStorage > 0f)
-                    return TankA;
-            }
-            
-            if (!TankB.IsLocked)
-            {
-                if (TankB.Content == StoredType.Water && type == StoredType.Water && !TankB.IsContaminated)
-                    return TankB;
-
-                if (TankB.Content == type && TankB.TankStorage > 0f && !TankB.IsLocked)
-                    return TankB;
-            }
+            if (TankB.Content == type && TankB.TankStorage > 0f && !TankB.IsLocked)
+                return TankB;
             
             return null;
         }
@@ -187,7 +180,7 @@ namespace HeavyLiquidShuttleMod
             {
                 defaultLabel = "Lock Tank A",
                 defaultDesc = "Tank A: Lock this tank so it cannot intake or output its contents.",
-                icon = ContentFinder<Texture2D>.Get("UI/Gizmo/LockTank"),
+                icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Lock"),
                 isActive = () => this.TankA.IsLocked,
                 toggleAction = () =>
                 {
@@ -198,7 +191,7 @@ namespace HeavyLiquidShuttleMod
             {
                 defaultLabel = "Lock Tank B",
                 defaultDesc = "Tank B: Lock this tank so it cannot intake or output its contents.",
-                icon = ContentFinder<Texture2D>.Get("UI/Gizmo/LockTank"),
+                icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Lock"),
                 isActive = () => this.TankB.IsLocked,
                 toggleAction = () =>
                 {
@@ -212,7 +205,7 @@ namespace HeavyLiquidShuttleMod
                 {
                     defaultLabel = "Drain Tank A",
                     defaultDesc = "Drain Tank A of its contents.",
-                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/DrainOut"),
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Drain"),
                     action = () =>
                     {
                         if (TankA.Content == StoredType.Water)
@@ -237,7 +230,7 @@ namespace HeavyLiquidShuttleMod
                 {
                     defaultLabel = "Drain Tank B",
                     defaultDesc = "Drain Tank B of its contents.",
-                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/DrainOut"),
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Drain"),
                     action = () =>
                     {
                         if (TankB.Content == StoredType.Water)
@@ -253,6 +246,163 @@ namespace HeavyLiquidShuttleMod
                         TankB.Content = StoredType.Empty;
                         TankB.TankStorage = 0f;
                         TankB.TransferEnabled = false;
+                    }
+                };
+            }
+
+            if (TankA.IsContaminated && TankA.Content == StoredType.Empty)
+            {
+                yield return new Command_Action
+                {
+                    defaultLabel = "Clean Tank A",
+                    defaultDesc = "Clean Tank A of its contamination.",
+                    icon = ContentFinder<Texture2D>.Get(""),
+                    action = () =>
+                    {
+                        Rot4 shuttleOrientation = this.parent.Rotation;
+                        int cell = 0;
+                        IntVec3 jobCell = new IntVec3(0, 0, 0);
+
+                        switch (shuttleOrientation.AsInt)
+                        {
+                            case 0:
+                                cell = 3;
+                                break;
+                            case 2:
+                                cell = 14;
+                                break;
+                            case 1:
+                                cell = 13;
+                                break;
+                            case 3:
+                                cell = 4;
+                                break;
+                        }
+
+                        if (cell != 0)
+                        {
+                            int i = 0;
+
+                            foreach (IntVec3 shuttleCell in this.parent.OccupiedRect())
+                            {
+                                if (cell == i)
+                                {
+                                    jobCell = shuttleCell;
+                                }
+                                i++;
+                            }
+                        }
+
+                        if (!jobCell.IsValid)
+                            return;
+
+                        LocalTargetInfo jobTargetA = new LocalTargetInfo(jobCell);
+                        LocalTargetInfo jobTargetB = new LocalTargetInfo(this.parent);
+
+                        Job job = JobMaker.MakeJob(CleanShuttleTank.CleanTank, jobTargetA, jobTargetB);
+
+                        Pawn? closestColonist = null;
+                        float closestDistance = float.MaxValue;
+
+                        foreach (Pawn candidate in this.parent.Map.mapPawns.FreeColonistsSpawned)
+                        {
+                            if (candidate.Dead || candidate.Downed)
+                                continue;
+
+                            if (!candidate.CanReach(jobCell, PathEndMode.Touch, Danger.Some))
+                                continue;
+
+                            float distance = candidate.Position.DistanceToSquared(jobCell);
+
+                            if (distance < closestDistance)
+                            {
+                                closestDistance = distance;
+                                closestColonist = candidate;
+                            }
+                        }
+
+                        if (closestColonist != null)
+                        {
+                            closestColonist.jobs.TryTakeOrderedJob(job);
+                        }
+                    }
+                };
+            }
+            if (TankB.IsContaminated && TankB.Content == StoredType.Empty)
+            {
+                yield return new Command_Action
+                {
+                    defaultLabel = "Clean Tank B",
+                    defaultDesc = "Clean Tank B of its contamination.",
+                    icon = ContentFinder<Texture2D>.Get(""),
+                    action = () =>
+                    {
+                        Rot4 shuttleOrientation = this.parent.Rotation;
+                        int cell = 0;
+                        IntVec3 jobCell = new IntVec3(0, 0, 0);
+
+                        switch (shuttleOrientation.AsInt)
+                        {
+                            case 0:
+                                cell = 5;
+                                break;
+                            case 2:
+                                cell = 12;
+                                break;
+                            case 1:
+                                cell = 1;
+                                break;
+                            case 3:
+                                cell = 16;
+                                break;
+                        }
+
+                        if (cell != 0)
+                        {
+                            int i = 0;
+
+                            foreach (IntVec3 shuttleCell in this.parent.OccupiedRect())
+                            {
+                                if (cell == i)
+                                {
+                                    jobCell = shuttleCell;
+                                }
+                                i++;
+                            }
+                        }
+
+                        if (!jobCell.IsValid)
+                            return;
+
+                        LocalTargetInfo jobTargetA = new LocalTargetInfo(jobCell);
+                        LocalTargetInfo jobTargetB = new LocalTargetInfo(this.parent);
+
+                        Job job = JobMaker.MakeJob(CleanShuttleTank.CleanTank, jobTargetA, jobTargetB);
+
+                        Pawn? closestColonist = null;
+                        float closestDistance = float.MaxValue;
+
+                        foreach (Pawn candidate in this.parent.Map.mapPawns.FreeColonistsSpawned)
+                        {
+                            if (candidate.Dead || candidate.Downed)
+                                continue;
+
+                            if (!candidate.CanReach(jobCell, PathEndMode.Touch, Danger.Some))
+                                continue;
+
+                            float distance = candidate.Position.DistanceToSquared(jobCell);
+
+                            if (distance < closestDistance)
+                            {
+                                closestDistance = distance;
+                                closestColonist = candidate;
+                            }
+                        }
+
+                        if (closestColonist != null)
+                        {
+                            closestColonist.jobs.TryTakeOrderedJob(job);
+                        }
                     }
                 };
             }
@@ -277,7 +427,7 @@ namespace HeavyLiquidShuttleMod
                 {
                     defaultLabel = "Discharge " + type,
                     defaultDesc = tank + ": Discharge into an adjacent " + type + " network.",
-                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Unload" + type),
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Discharge"),
                     isActive = () =>
                     {
                         return shuttle.TankA.TransferEnabled;
@@ -298,7 +448,7 @@ namespace HeavyLiquidShuttleMod
                 {
                     defaultLabel = "Discharge " + type,
                     defaultDesc = tank + ": Discharge into an adjacent " + type + " network.",
-                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Unload" + type),
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Discharge"),
                     isActive = () =>
                     {
                         return shuttle.TankB.TransferEnabled;
@@ -318,16 +468,20 @@ namespace HeavyLiquidShuttleMod
         // Displays tank contents
         public override string CompInspectStringExtra()
         {
-            string tankA = "";
-            string tankB = "";
+            string tankA;
+            string tankB;
 
-            if (TankA.IsContaminated && TankA.Content == StoredType.Water)
-                tankA = $"Tank A: {TankA.Content} (Contaminated) |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
+            if (TankA.Content == StoredType.Water)
+                tankA = $"Tank A: {TankA.Content} ({TankA.WaterQuality}) |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
+            else if (TankA.Content == StoredType.Empty && TankA.IsContaminated)
+                tankA = $"Tank A: Empty (Contaminated) |  Capacity: 0 / {TankA.TankCapacity} Liters\n";
             else
                 tankA = $"Tank A: {TankA.Content} |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
 
-            if (TankB.IsContaminated && TankB.Content == StoredType.Water)
-                tankB = $"Tank B: {TankB.Content} (Contaminated) |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
+            if (TankB.Content == StoredType.Water)
+                tankB = $"Tank B: {TankB.Content} ({TankB.WaterQuality}) |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
+            else if (TankB.Content == StoredType.Empty && TankB.IsContaminated)
+                tankB = $"Tank B: Empty (Contaminated) |  Capacity: 0 / {TankB.TankCapacity} Liters";
             else
                 tankB = $"Tank B: {TankB.Content} |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
 
@@ -340,8 +494,6 @@ namespace HeavyLiquidShuttleMod
             Scribe_Values.Look(ref TankB.TankStorage, "tankBStorage", 0f);
             Scribe_Values.Look(ref TankA.Content, "tankAContent", StoredType.Empty);
             Scribe_Values.Look(ref TankB.Content, "tankBContent", StoredType.Empty);
-            Scribe_Values.Look(ref TankA.TransferEnabled, "tankATransferEnabled", false);
-            Scribe_Values.Look(ref TankB.TransferEnabled, "tankBTransferEnabled", false);
             Scribe_Values.Look(ref TankA.IsLocked, "tankALocked", false);
             Scribe_Values.Look(ref TankB.IsLocked, "tankBLocked", false);
         }

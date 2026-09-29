@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using Verse;
 
 namespace HeavyLiquidShuttleMod
@@ -46,10 +45,7 @@ namespace HeavyLiquidShuttleMod
                     TNetwork1? net = examineThing(thing, adjTile);
 
                     if (net != null)
-                    {
                         nets.Add(net);
-                        break;
-                    }
                 }
             }
             return nets;

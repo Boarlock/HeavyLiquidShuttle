@@ -48,7 +48,7 @@ namespace HeavyLiquidShuttleMod
         protected abstract void FindValidStoragesX(
             out TStorage1? validSupplyStorage, 
             out TStorage1? validReceiveStorage);
-        protected abstract float ModifyStorageX(TStorage1 storage, float amount, bool addTo);
+        protected abstract float ModifyStorageX(TStorage1 storage, TankState tank, float amount, bool addTo);
 
         protected virtual void OnShuttleTick()
         {
@@ -193,7 +193,7 @@ namespace HeavyLiquidShuttleMod
             if (amount <= 0f)
                 return;
 
-            float transferred = ModifyStorageX(storage, amount, true);
+            float transferred = ModifyStorageX(storage, tank, amount, true);
 
             tank.TankStorage -= transferred;
 
@@ -218,7 +218,7 @@ namespace HeavyLiquidShuttleMod
             if (amount <= 0f)
                 return;
 
-            float transferred = ModifyStorageX(storage, amount, false);
+            float transferred = ModifyStorageX(storage, tank, amount, false);
 
             if (transferred > 0f)
                 tank.Content = LiquidTypeX;
@@ -263,7 +263,7 @@ namespace HeavyLiquidShuttleMod
         protected abstract void FindValidStoragesY(
             out TStorage2? validSupplyStorage,
             out TStorage2? validReceiveStorage);
-        protected abstract float ModifyStorageY(TStorage2 storage, float amount, bool addTo);
+        protected abstract float ModifyStorageY(TStorage2 storage, TankState tank, float amount, bool addTo);
 
         protected override void OnShuttleTick()
         {
@@ -427,7 +427,7 @@ namespace HeavyLiquidShuttleMod
             if (amount <= 0f)
                 return;
 
-            float transferred = ModifyStorageY(storage, amount, true);
+            float transferred = ModifyStorageY(storage, tank, amount, true);
 
             tank.TankStorage -= transferred;
 
@@ -452,7 +452,7 @@ namespace HeavyLiquidShuttleMod
             if (amount <= 0f)
                 return;
 
-            float transferred = ModifyStorageY(storage, amount, false);
+            float transferred = ModifyStorageY(storage, tank, amount, false);
 
             if (transferred > 0f)
                 tank.Content = LiquidTypeY;

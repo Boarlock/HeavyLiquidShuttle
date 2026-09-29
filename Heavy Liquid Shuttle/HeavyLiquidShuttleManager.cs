@@ -48,6 +48,14 @@ namespace HeavyLiquidShuttleMod
         public float ReceiveAllowance = 1f;
 
         public StoredType Content = StoredType.Empty;
+        public WaterState WaterQuality = WaterState.Untreated;
+
+        public enum WaterState
+        {
+            Treated,
+            Untreated,
+            Contaminated
+        }
     }
 
     public static class HeavyLiquidShuttleManager

@@ -37,10 +37,11 @@ namespace HeavyLiquidShuttleMod
                 out validReceiveStorage);
         }
 
-        protected override float ModifyStorageX(CompStorageTank storage, float amount, bool addTo)
+        protected override float ModifyStorageX(CompStorageTank storage, TankState tank, float amount, bool addTo)
         {
-            float transferred = 0f;
+            float transferred;
 
+            // Adding to storage is subtracting from shuttle tanks
             if (addTo)
             {
                 transferred = Mathf.Min(amount, storage.space);
@@ -50,6 +51,10 @@ namespace HeavyLiquidShuttleMod
 
             transferred = Mathf.Min(amount, (float)storage.Storage);
             storage.Storage -= transferred;
+
+            if (transferred > 0f && !tank.IsContaminated)
+                tank.IsContaminated = true;
+
             return transferred;
         }
 
