@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Verse;
 using Verse.AI;
+using static RimWorld.PsychicRitualRoleDef;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -31,40 +32,85 @@ namespace HeavyLiquidShuttleMod
             Toil cleaning = new Toil
             {
                 defaultCompleteMode = ToilCompleteMode.Delay,
-                defaultDuration = 300
+                defaultDuration = 900
             };
 
-            cleaning.AddFinishAction(() =>
+            this.AddFinishAction(condition =>
             {
-                HeavyLiquidShuttle shuttle = job.GetTarget(TargetIndex.B).Thing.TryGetComp<HeavyLiquidShuttle>();
+                HeavyLiquidShuttle shuttle = TargetB.Thing.TryGetComp<HeavyLiquidShuttle>();
 
                 if (shuttle == null)
                     return;
 
-                TankState? tank = null;
-                int i = 0;
+                Rot4 rotation = shuttle.parent.Rotation;
+                IntVec3 target = (IntVec3)TargetA;
+                IntVec3 origin = (IntVec3)TargetC;
 
-                foreach (IntVec3 shuttleCell in shuttle.parent.OccupiedRect())
+                bool jobFailed = condition != JobCondition.Succeeded;
+
+                if (!FinishTank(shuttle, target, origin, rotation, jobFailed))
                 {
-                    if (shuttleCell == job.GetTarget(TargetIndex.A).Cell)
-                        break;
-
-                    i++;
+                    shuttle.CleaningTankA = false;
+                    shuttle.CleaningTankB = false;
                 }
-
-                if (i == 3 || i == 4 || i == 13 || i == 14)
-                    tank = shuttle.TankA;
-
-                if (i == 1 || i == 5 || i == 12 || i == 16)
-                    tank = shuttle.TankB;
-
-                if (tank == null)
-                    return;
-
-                tank.IsContaminated = false;
             });
 
             yield return cleaning;
+        }
+
+        private bool FinishTank(
+            HeavyLiquidShuttle shuttle, 
+            IntVec3 target, 
+            IntVec3 origin, 
+            Rot4 rotation,
+            bool jobFailed = false)
+        {
+            IntVec3 relative = target - origin;
+            bool isTankA = false;
+            bool isTankB = false;
+
+            switch (rotation.AsInt)
+            {
+                // North
+                case 0:
+                    if (relative.x == 1 && relative.z == 1) isTankA = true;
+                    else if (relative.x == 1 && relative.z == 3) isTankB = true;
+                    break;
+                // South
+                case 2:
+                    if (relative.x == 5 && relative.z == 3) isTankA = true;
+                    else if (relative.x == 5 && relative.z == 1) isTankB = true;
+                    break;
+                // East
+                case 1:
+                    if (relative.x == 2 && relative.z == 3) isTankA = true;
+                    else if (relative.x == 2 && relative.z == 1) isTankB = true;
+                    break;
+                // West
+                case 3:
+                    if (relative.x == 5 && relative.z == 1) isTankA = true;
+                    else if (relative.x == 5 && relative.z == 3) isTankB = true;
+                    break;
+            }
+
+            if (isTankA)
+            {
+                if (!jobFailed)
+                    shuttle.TankA.IsContaminated = false;
+
+                shuttle.CleaningTankA = false;
+                return true;
+            }
+            else if (isTankB)
+            {
+                if (!jobFailed)
+                    shuttle.TankB.IsContaminated = false;
+
+                shuttle.CleaningTankB = false;
+                return true;
+            }
+
+            return false;
         }
     }
 }

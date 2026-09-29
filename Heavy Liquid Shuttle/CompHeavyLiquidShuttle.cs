@@ -78,6 +78,8 @@ namespace HeavyLiquidShuttleMod
         // Tank specific state data
         public TankState TankA = new TankState();
         public TankState TankB = new TankState();
+        public bool CleaningTankA;
+        public bool CleaningTankB;
 
         // Toggle for when a Shuttle Tank is actively transferring
         public void ToggleTransfer(TankState tank)
@@ -250,158 +252,42 @@ namespace HeavyLiquidShuttleMod
                 };
             }
 
-            if (TankA.IsContaminated && TankA.Content == StoredType.Empty)
+            if (TankA.IsContaminated)
             {
-                yield return new Command_Action
+                yield return new Command_Toggle
                 {
                     defaultLabel = "Clean Tank A",
                     defaultDesc = "Clean Tank A of its contamination.",
-                    icon = ContentFinder<Texture2D>.Get(""),
-                    action = () =>
+                    Disabled = TankA.Content != StoredType.Empty,
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Clean"),
+                    isActive = () => CleaningTankA,
+                    toggleAction = () =>
                     {
-                        Rot4 shuttleOrientation = this.parent.Rotation;
-                        int cell = 0;
-                        IntVec3 jobCell = new IntVec3(0, 0, 0);
+                        CleaningTankA = !CleaningTankA;
 
-                        switch (shuttleOrientation.AsInt)
+                        if (CleaningTankA)
                         {
-                            case 0:
-                                cell = 3;
-                                break;
-                            case 2:
-                                cell = 14;
-                                break;
-                            case 1:
-                                cell = 13;
-                                break;
-                            case 3:
-                                cell = 4;
-                                break;
-                        }
-
-                        if (cell != 0)
-                        {
-                            int i = 0;
-
-                            foreach (IntVec3 shuttleCell in this.parent.OccupiedRect())
-                            {
-                                if (cell == i)
-                                {
-                                    jobCell = shuttleCell;
-                                }
-                                i++;
-                            }
-                        }
-
-                        if (!jobCell.IsValid)
-                            return;
-
-                        LocalTargetInfo jobTargetA = new LocalTargetInfo(jobCell);
-                        LocalTargetInfo jobTargetB = new LocalTargetInfo(this.parent);
-
-                        Job job = JobMaker.MakeJob(CleanShuttleTank.CleanTank, jobTargetA, jobTargetB);
-
-                        Pawn? closestColonist = null;
-                        float closestDistance = float.MaxValue;
-
-                        foreach (Pawn candidate in this.parent.Map.mapPawns.FreeColonistsSpawned)
-                        {
-                            if (candidate.Dead || candidate.Downed)
-                                continue;
-
-                            if (!candidate.CanReach(jobCell, PathEndMode.Touch, Danger.Some))
-                                continue;
-
-                            float distance = candidate.Position.DistanceToSquared(jobCell);
-
-                            if (distance < closestDistance)
-                            {
-                                closestDistance = distance;
-                                closestColonist = candidate;
-                            }
-                        }
-
-                        if (closestColonist != null)
-                        {
-                            closestColonist.jobs.TryTakeOrderedJob(job);
+                            TryStartTankCleaning(true);
                         }
                     }
                 };
             }
-            if (TankB.IsContaminated && TankB.Content == StoredType.Empty)
+            if (TankB.IsContaminated)
             {
-                yield return new Command_Action
+                yield return new Command_Toggle
                 {
                     defaultLabel = "Clean Tank B",
                     defaultDesc = "Clean Tank B of its contamination.",
-                    icon = ContentFinder<Texture2D>.Get(""),
-                    action = () =>
+                    Disabled = TankB.Content != StoredType.Empty,
+                    icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Clean"),
+                    isActive = () => CleaningTankB,
+                    toggleAction = () =>
                     {
-                        Rot4 shuttleOrientation = this.parent.Rotation;
-                        int cell = 0;
-                        IntVec3 jobCell = new IntVec3(0, 0, 0);
+                        CleaningTankB = !CleaningTankB;
 
-                        switch (shuttleOrientation.AsInt)
+                        if (CleaningTankB)
                         {
-                            case 0:
-                                cell = 5;
-                                break;
-                            case 2:
-                                cell = 12;
-                                break;
-                            case 1:
-                                cell = 1;
-                                break;
-                            case 3:
-                                cell = 16;
-                                break;
-                        }
-
-                        if (cell != 0)
-                        {
-                            int i = 0;
-
-                            foreach (IntVec3 shuttleCell in this.parent.OccupiedRect())
-                            {
-                                if (cell == i)
-                                {
-                                    jobCell = shuttleCell;
-                                }
-                                i++;
-                            }
-                        }
-
-                        if (!jobCell.IsValid)
-                            return;
-
-                        LocalTargetInfo jobTargetA = new LocalTargetInfo(jobCell);
-                        LocalTargetInfo jobTargetB = new LocalTargetInfo(this.parent);
-
-                        Job job = JobMaker.MakeJob(CleanShuttleTank.CleanTank, jobTargetA, jobTargetB);
-
-                        Pawn? closestColonist = null;
-                        float closestDistance = float.MaxValue;
-
-                        foreach (Pawn candidate in this.parent.Map.mapPawns.FreeColonistsSpawned)
-                        {
-                            if (candidate.Dead || candidate.Downed)
-                                continue;
-
-                            if (!candidate.CanReach(jobCell, PathEndMode.Touch, Danger.Some))
-                                continue;
-
-                            float distance = candidate.Position.DistanceToSquared(jobCell);
-
-                            if (distance < closestDistance)
-                            {
-                                closestDistance = distance;
-                                closestColonist = candidate;
-                            }
-                        }
-
-                        if (closestColonist != null)
-                        {
-                            closestColonist.jobs.TryTakeOrderedJob(job);
+                            TryStartTankCleaning(false);
                         }
                     }
                 };
@@ -463,6 +349,130 @@ namespace HeavyLiquidShuttleMod
                 };
             }
             return null;
+        }
+
+        private void TryStartTankCleaning(bool handlingA)
+        {
+            Rot4 shuttleOrientation = this.parent.Rotation;
+            int cell = 0;
+            IntVec3 jobCell = new IntVec3(0, 0, 0);
+            IntVec3 refCell = new IntVec3(0, 0, 0);
+
+            if (handlingA)
+            {
+                switch (shuttleOrientation.AsInt)
+                {
+                    case 0:
+                        cell = 3;
+                        break;
+                    case 2:
+                        cell = 14;
+                        break;
+                    case 1:
+                        cell = 13;
+                        break;
+                    case 3:
+                        cell = 4;
+                        break;
+                }
+            }
+            else if (!handlingA)
+            {
+                switch (shuttleOrientation.AsInt)
+                {
+                    case 0:
+                        cell = 5;
+                        break;
+                    case 2:
+                        cell = 12;
+                        break;
+                    case 1:
+                        cell = 1;
+                        break;
+                    case 3:
+                        cell = 16;
+                        break;
+                }
+            }
+
+            if (cell == 0)
+            {
+                if (handlingA)
+                    CleaningTankA = false;
+                else
+                    CleaningTankB = false;
+
+                return;
+            }
+
+            int i = 0;
+
+            foreach (IntVec3 shuttleCell in this.parent.OccupiedRect())
+            {
+                if (cell == i)
+                {
+                    jobCell = shuttleCell;
+                }
+
+                if (i == 0)
+                {
+                    refCell = shuttleCell;
+                }
+
+                i++;
+            }
+            
+
+            if (!jobCell.IsValid)
+            {
+                if (handlingA) CleaningTankA = false;
+                else CleaningTankB = false;
+                return;
+            }
+
+            LocalTargetInfo jobTargetA = new LocalTargetInfo(jobCell);
+            LocalTargetInfo jobTargetB = new LocalTargetInfo(this.parent);
+            LocalTargetInfo jobTargetC = new LocalTargetInfo(refCell);
+
+            Job job = JobMaker.MakeJob(CleanShuttleTank.CleanTank, jobTargetA, jobTargetB, jobTargetC);
+
+            Pawn? closestColonist = null;
+            float closestDistance = float.MaxValue;
+
+            foreach (Pawn candidate in this.parent.Map.mapPawns.FreeColonistsSpawned)
+            {
+                if (candidate.Dead || candidate.Downed)
+                    continue;
+
+                if (candidate.CurJobDef == JobDefOf.LayDown)
+                    continue;
+
+                if (!candidate.CanReach(jobCell, PathEndMode.Touch, Danger.Some))
+                    continue;
+
+                float distance = candidate.Position.DistanceToSquared(jobCell);
+
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestColonist = candidate;
+                }
+            }
+
+            if (closestColonist == null)
+            {
+                if (handlingA) CleaningTankA = false;
+                else CleaningTankB = false;
+                return;
+            }
+
+            if (!closestColonist.jobs.TryTakeOrderedJob(job))
+            {
+                if (handlingA)
+                    CleaningTankA = false;
+                else
+                    CleaningTankB = false;
+            }
         }
 
         // Displays tank contents
