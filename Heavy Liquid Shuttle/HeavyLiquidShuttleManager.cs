@@ -49,6 +49,7 @@ namespace HeavyLiquidShuttleMod
 
         public StoredType Content = StoredType.Empty;
         public WaterState WaterQuality = WaterState.Untreated;
+        public HelixienState TankExplosiveness = HelixienState.None;
 
         public enum WaterState
         {
@@ -56,6 +57,38 @@ namespace HeavyLiquidShuttleMod
             Untreated,
             Contaminated
         }
+
+        public enum HelixienState
+        {
+            None,
+            Low,
+            Moderate,
+            High
+        }
+
+        public HelixienState GetHelixienState(out bool stateChanged)
+        {
+            HelixienState oldState = TankExplosiveness;
+            HelixienState newState;
+            stateChanged = false;
+
+            if (TankStorage < 100f)
+                newState = HelixienState.None;
+
+            else if (TankStorage < 250f)
+                newState = HelixienState.Low;
+
+            else if (TankStorage < 500f)
+                newState = HelixienState.Moderate;
+
+            else
+                newState = HelixienState.High;
+
+            if (oldState != newState)
+                stateChanged = true;
+
+            return newState;
+        }       
     }
 
     public static class HeavyLiquidShuttleManager

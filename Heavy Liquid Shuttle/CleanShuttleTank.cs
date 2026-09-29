@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Verse;
 using Verse.AI;
-using static RimWorld.PsychicRitualRoleDef;
+using System;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -35,6 +35,9 @@ namespace HeavyLiquidShuttleMod
                 defaultDuration = 900
             };
 
+            // Provide a progress getter for the progress bar 
+            cleaning.WithProgressBar(TargetIndex.A, () => 1f - (float)ticksLeftThisToil / cleaning.defaultDuration);
+
             this.AddFinishAction(condition =>
             {
                 HeavyLiquidShuttle shuttle = TargetB.Thing.TryGetComp<HeavyLiquidShuttle>();
@@ -65,7 +68,8 @@ namespace HeavyLiquidShuttleMod
             Rot4 rotation,
             bool jobFailed = false)
         {
-            IntVec3 relative = target - origin;
+            int relativeX = Math.Abs(target.x - origin.x);
+            int relativeZ = Math.Abs(target.z - origin.z);
             bool isTankA = false;
             bool isTankB = false;
 
@@ -73,23 +77,23 @@ namespace HeavyLiquidShuttleMod
             {
                 // North
                 case 0:
-                    if (relative.x == 1 && relative.z == 1) isTankA = true;
-                    else if (relative.x == 1 && relative.z == 3) isTankB = true;
+                    if (relativeX == 0 && relativeZ == 1) isTankA = true;
+                    else if (relativeX == 2 && relativeZ == 1) isTankB = true;
                     break;
                 // South
                 case 2:
-                    if (relative.x == 5 && relative.z == 3) isTankA = true;
-                    else if (relative.x == 5 && relative.z == 1) isTankB = true;
+                    if (relativeX == 2 && relativeZ == 4) isTankA = true;
+                    else if (relativeX == 0 && relativeZ == 4) isTankB = true;
                     break;
                 // East
                 case 1:
-                    if (relative.x == 2 && relative.z == 3) isTankA = true;
-                    else if (relative.x == 2 && relative.z == 1) isTankB = true;
+                    if (relativeX == 1 && relativeZ == 2) isTankA = true;
+                    else if (relativeX == 1 && relativeZ == 0) isTankB = true;
                     break;
                 // West
                 case 3:
-                    if (relative.x == 5 && relative.z == 1) isTankA = true;
-                    else if (relative.x == 5 && relative.z == 3) isTankB = true;
+                    if (relativeX == 4 && relativeZ == 0) isTankA = true;
+                    else if (relativeX == 4 && relativeZ == 2) isTankB = true;
                     break;
             }
 

@@ -2,7 +2,6 @@
 using Rimefeller;
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using UnityEngine;
 using static HeavyLiquidShuttleMod.TankState;
 
@@ -13,6 +12,9 @@ namespace HeavyLiquidShuttleMod
         public DubwiseSharedIntegration(HeavyLiquidShuttle shuttle) : base(shuttle) => shuttle.OilSpillIntegration += StartOilSpill;
         protected override StoredType LiquidTypeX => StoredType.Water;
         protected override StoredType LiquidTypeY => StoredType.Oil;
+
+        protected override void HandleHelixienTank(TankState tank) { }
+        protected override void ExplosiveCompSet() { }
 
         protected override void OnCleanup() => Shuttle.OilSpillIntegration -= StartOilSpill;
 

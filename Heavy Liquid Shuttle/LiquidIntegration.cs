@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using RimWorld;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 using Verse;
 
@@ -264,6 +266,7 @@ namespace HeavyLiquidShuttleMod
             out TStorage2? validSupplyStorage,
             out TStorage2? validReceiveStorage);
         protected abstract float ModifyStorageY(TStorage2 storage, TankState tank, float amount, bool addTo);
+        protected abstract void ExplosiveCompSet();
 
         protected override void OnShuttleTick()
         {
@@ -430,6 +433,7 @@ namespace HeavyLiquidShuttleMod
             float transferred = ModifyStorageY(storage, tank, amount, true);
 
             tank.TankStorage -= transferred;
+            HandleHelixienTank(tank);
 
             tank.SupplyAllowance -= transferred;
             MassPatch.NotifyLiquidMassChanged(Shuttle);
@@ -458,8 +462,20 @@ namespace HeavyLiquidShuttleMod
                 tank.Content = LiquidTypeY;
 
             tank.TankStorage += transferred;
+            HandleHelixienTank(tank);
+
             tank.ReceiveAllowance -= transferred;
             MassPatch.NotifyLiquidMassChanged(Shuttle);
+        }
+
+        protected virtual void HandleHelixienTank(TankState tank)
+        {
+            tank.TankExplosiveness = tank.GetHelixienState(out bool stateChanged);
+
+            if (!stateChanged)
+                return;
+
+            ExplosiveCompSet();
         }
 
         protected override IEnumerable<Gizmo> AddGizmos()

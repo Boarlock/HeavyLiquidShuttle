@@ -1,7 +1,9 @@
 ﻿using PipeSystem;
+using RimWorld;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -131,6 +133,93 @@ namespace HeavyLiquidShuttleMod
             float removed = Mathf.Min(amount, storage.AmountStored);
             SetAmountStored(storage, storage.AmountStored - removed);
             return removed;
+        }
+
+        protected override void ExplosiveCompSet()
+        {
+            CompExplosiveContent comp = Shuttle.parent.TryGetComp<CompExplosiveContent>();
+
+            int totalExplosiveness = 0;
+
+            switch (Shuttle.TankA.TankExplosiveness)
+            {
+                case TankState.HelixienState.Low:
+                    totalExplosiveness++;
+                    break;
+                case TankState.HelixienState.Moderate:
+                    totalExplosiveness += 2;
+                    break;
+                case TankState.HelixienState.High:
+                    totalExplosiveness += 3;
+                    break;
+            }
+            switch (Shuttle.TankB.TankExplosiveness)
+            {
+                case TankState.HelixienState.Low:
+                    totalExplosiveness++;
+                    break;
+                case TankState.HelixienState.Moderate:
+                    totalExplosiveness += 2;
+                    break;
+                case TankState.HelixienState.High:
+                    totalExplosiveness += 3;
+                    break;
+            }
+
+            if (totalExplosiveness <= 0)
+            {
+                if (comp != null)
+                    Shuttle.parent.AllComps.Remove(comp);
+
+                return;
+            }
+
+            CompProperties_ExplosiveContent props;
+
+            if (comp != null)
+                props = (CompProperties_ExplosiveContent)comp.props;
+            else
+            {
+                props = new CompProperties_ExplosiveContent()
+                {
+                    explosiveDamageType = DamageDefOf.Flame,
+                    startWickHitPointsPercent = 0.333f,
+                    preExplosionSpawnThingDef = ThingDefOf.Filth_Fuel,
+                    preExplosionSpawnChance = 1f,
+                    wickTicks = new IntRange(70, 150)
+                };
+            }
+
+            if (totalExplosiveness >= 5)
+            {
+                props.explosiveMinRadius = 10f;
+                props.explosiveMaxRadius = 10f;
+                props.radiusRequiredForExplosion = 10f;
+                props.destroyThingOnExplosionSize = 3;
+            }
+            else if (totalExplosiveness >= 3)
+            {
+                props.explosiveMinRadius = 7f;
+                props.explosiveMaxRadius = 7f;
+                props.radiusRequiredForExplosion = 7f;
+                props.destroyThingOnExplosionSize = 2;
+            }
+            else if (totalExplosiveness >= 1)
+            {
+                props.explosiveMinRadius = 4f;
+                props.explosiveMaxRadius = 4f;
+                props.radiusRequiredForExplosion = 4f;
+                props.destroyThingOnExplosionSize = 1;
+            }
+
+            if (comp == null)
+            {
+                CompExplosiveContent newComp = new CompExplosiveContent();
+                newComp.parent = Shuttle.parent;
+                newComp.Initialize(props);
+
+                Shuttle.parent.AllComps.Add(newComp);
+            }
         }
     }
 }
