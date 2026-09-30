@@ -57,22 +57,17 @@ namespace HeavyLiquidShuttleMod
 
     public class ShuttleExplosion : ThingComp
     {
-        private readonly HeavyLiquidShuttle shuttle;
-
         public TankState.HelixienState explosiveness;
         public int explosionRadius;
         public int destroyThingOnExplosionSize;
 
         public CompProperties_ShuttleExplosive Props => (CompProperties_ShuttleExplosive)props;
 
-        public ShuttleExplosion(HeavyLiquidShuttle shuttle) 
-        { 
-            this.shuttle = shuttle;
-        }
+        public HeavyLiquidShuttle Shuttle => parent.GetComp<HeavyLiquidShuttle>();
 
         public void ExplosiveCompSet()
         {
-            int totalExplosiveness = shuttle.TankA.GetExplosiveness() + shuttle.TankB.GetExplosiveness();
+            int totalExplosiveness = Shuttle.TankA.GetExplosiveness() + Shuttle.TankB.GetExplosiveness();
 
             if (totalExplosiveness <= 0)
             {

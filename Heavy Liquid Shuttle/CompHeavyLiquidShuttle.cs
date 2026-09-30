@@ -539,7 +539,8 @@ namespace HeavyLiquidShuttleMod
 
             ShuttleExplosion c = this.parent.TryGetComp<ShuttleExplosion>();
 
-            if (!(c.explosiveness != TankState.HelixienState.None && (this.parent.HitPoints / this.parent.MaxHitPoints) < c.Props.startWickHitPointsPercent))
+            if (c == null || c.explosiveness == TankState.HelixienState.None || parent.HitPoints / (float)parent.MaxHitPoints >
+                c.Props.startWickHitPointsPercent || detonation != null)
                 return;
 
             detonation = new Detonate(this);
