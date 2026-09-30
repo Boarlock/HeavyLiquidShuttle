@@ -88,7 +88,29 @@ namespace HeavyLiquidShuttleMod
                 stateChanged = true;
 
             return newState;
-        }       
+        }  
+        
+        public int GetExplosiveness()
+        {
+            int total = 0;
+
+            switch (TankExplosiveness)
+            {
+                case TankState.HelixienState.Low:
+                    total++;
+                    break;
+                case TankState.HelixienState.Moderate:
+                    total += 2;
+                    break;
+                case TankState.HelixienState.High:
+                    total += 3;
+                    break;
+                default:
+                    return 0;
+            }
+
+            return total;
+        }
     }
 
     public static class HeavyLiquidShuttleManager

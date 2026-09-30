@@ -108,8 +108,9 @@ namespace HeavyLiquidShuttleMod
             tank.IsLocked = !tank.IsLocked;
         }
 
-        // Used for placing Oil Spills from Rimefeller
+        // Used for Mod Integration special actions
         public IntVec3 OilConnectionAt {  get; set; }
+        private Detonate? detonation;
 
         // Helpers for returning Shuttle Tanks
         public TankState? GetTankForReceive(StoredType type)
@@ -497,7 +498,6 @@ namespace HeavyLiquidShuttleMod
         {
             string tankA;
             string tankB;
-            string explosiveness = "";
 
             if (TankA.Content == StoredType.Water)
                 tankA = $"Tank A: {TankA.Content} ({TankA.WaterQuality}) |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
@@ -507,21 +507,48 @@ namespace HeavyLiquidShuttleMod
                 tankA = $"Tank A: {TankA.Content} |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
 
             if (TankB.Content == StoredType.Water)
-                tankB = $"Tank B: {TankB.Content} ({TankB.WaterQuality}) |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters\n";
+                tankB = $"Tank B: {TankB.Content} ({TankB.WaterQuality}) |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
             else if (TankB.Content == StoredType.Empty && TankB.IsContaminated)
-                tankB = $"Tank B: Empty (Contaminated) |  Capacity: 0 / {TankB.TankCapacity} Liters\n";
+                tankB = $"Tank B: Empty (Contaminated) |  Capacity: 0 / {TankB.TankCapacity} Liters";
             else
-                tankB = $"Tank B: {TankB.Content} |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters\n";
+                tankB = $"Tank B: {TankB.Content} |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
 
             if (HeavyLiquidShuttleMod.VEHelixienActive)
             {
-                if (TankA.TankExplosiveness != TankState.HelixienState.None)
-                    explosiveness += $"Tank A Explosiveness: {TankA.TankExplosiveness}\n";
-                if (TankB.TankExplosiveness != TankState.HelixienState.None)
-                    explosiveness += $"Tank B Explosiveness: {TankB.TankExplosiveness}\n";
+                int totalExplosiveness = TankA.GetExplosiveness() + TankB.GetExplosiveness();
+                string explosiveness;
+
+                if (totalExplosiveness >= 5)
+                    explosiveness = "\nExplosiveness: High";
+                else if (totalExplosiveness >= 3)
+                    explosiveness = "\nExplosiveness: Moderate";
+                else if (totalExplosiveness >= 1)
+                    explosiveness = "\nExplosiveness: Low";
+                else
+                    explosiveness = "\nExplosiveness: None";
+
+                return tankA + tankB + explosiveness;
             }
 
-            return tankA + tankB + explosiveness;
+            return tankA + tankB;
+        }
+
+        public override void PostPostApplyDamage(DamageInfo dinfo, float totalDamageDealt)
+        {
+            base.PostPostApplyDamage(dinfo, totalDamageDealt);
+
+            ShuttleExplosion c = this.parent.TryGetComp<ShuttleExplosion>();
+
+            if (!(c.explosiveness != TankState.HelixienState.None && (this.parent.HitPoints / this.parent.MaxHitPoints) < c.Props.startWickHitPointsPercent))
+                return;
+
+            detonation = new Detonate(this);
+            detonation.StartWick(dinfo.Instigator);
+        }
+
+        public override void CompTick()
+        {
+            detonation?.Tick();
         }
 
         public override void PostExposeData()
