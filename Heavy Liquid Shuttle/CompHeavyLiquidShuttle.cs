@@ -156,6 +156,9 @@ namespace HeavyLiquidShuttleMod
                 case StoredType.Helixien:
                     totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.HelixienMassPerLiter;
                     break;
+                case StoredType.Scarlet:
+                    totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.ScarletMassPerLiter;
+                    break;
             }
 
             switch (TankB.Content)

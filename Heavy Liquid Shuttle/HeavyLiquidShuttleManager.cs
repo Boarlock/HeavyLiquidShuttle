@@ -122,6 +122,7 @@ namespace HeavyLiquidShuttleMod
         public const float CrudeMassPerLiter = 0.85f;
         public const float DeepchemMassPerLiter = 1.2f;
         public const float HelixienMassPerLiter = 0.2f;
+        public const float ScarletMassPerLiter = 1.1f;
 
         internal static void OnApplicationFocusChanged(bool hasFocus)
         {
