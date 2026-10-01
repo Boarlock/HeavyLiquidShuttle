@@ -71,6 +71,9 @@ namespace HeavyLiquidShuttleMod
             if ((vechemActive || vehelixActive) && LibraryLoaders.VESharedIntegrationType != null)
             {
                 veIntegration = Activator.CreateInstance(LibraryLoaders.VESharedIntegrationType, this);
+
+
+
                 explosiveCompSetMethod = LibraryLoaders.VESharedIntegrationType.GetMethod("ExplosiveCompSet", BindingFlags.NonPublic | BindingFlags.Instance);
             }
 
@@ -513,7 +516,7 @@ namespace HeavyLiquidShuttleMod
             else
                 tankB = $"Tank B: {TankB.Content} |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
 
-            if (HeavyLiquidShuttleMod.VEHelixienActive)
+            if (TankA.Content == StoredType.Helixien || TankB.Content == StoredType.Helixien)
             {
                 int totalExplosiveness = TankA.GetExplosiveness() + TankB.GetExplosiveness();
                 string explosiveness;

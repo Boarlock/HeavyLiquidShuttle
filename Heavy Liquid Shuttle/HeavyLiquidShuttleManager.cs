@@ -32,7 +32,8 @@ namespace HeavyLiquidShuttleMod
         Water,
         Oil,
         Deepchem,
-        Helixien
+        Helixien,
+        Scarlet
     }
 
     public class TankState
@@ -129,8 +130,6 @@ namespace HeavyLiquidShuttleMod
 
             if (hasFocus)
                 return;
-
-            Log.Message("[HeavyLiquidShuttle] Application lost focus. Halting transfers.");
 
             foreach (Map map in Find.Maps)
             {

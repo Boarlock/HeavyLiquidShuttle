@@ -1,4 +1,5 @@
 ﻿using RimWorld;
+using System;
 using Verse;
 
 namespace HeavyLiquidShuttleMod
@@ -62,10 +63,9 @@ namespace HeavyLiquidShuttleMod
         public int destroyThingOnExplosionSize;
 
         public CompProperties_ShuttleExplosive Props => (CompProperties_ShuttleExplosive)props;
-
         public HeavyLiquidShuttle Shuttle => parent.GetComp<HeavyLiquidShuttle>();
 
-        public void ExplosiveCompSet()
+        public void UpdateExplosiveness()
         {
             int totalExplosiveness = Shuttle.TankA.GetExplosiveness() + Shuttle.TankB.GetExplosiveness();
 

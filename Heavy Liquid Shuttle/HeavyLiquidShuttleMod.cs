@@ -13,6 +13,7 @@ namespace HeavyLiquidShuttleMod
         public static bool RimefellerActive { get; private set; }
         public static bool VEChemfuelActive { get; private set; }
         public static bool VEHelixienActive { get; private set; }
+        public static bool VEScarletActive { get; private set; }
 
         public HeavyLiquidShuttleMod(ModContentPack content) : base(content)
         {
@@ -31,8 +32,9 @@ namespace HeavyLiquidShuttleMod
 
             VEChemfuelActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.VChemfuelE");
             VEHelixienActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.HelixienGas");
+            VEScarletActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Ushanka.LuciferiumExpansion");
 
-            if (VEChemfuelActive || VEHelixienActive)
+            if (VEChemfuelActive || VEHelixienActive || VEScarletActive)
                 LibraryLoaders.VELoad();
 
             Application.focusChanged += HeavyLiquidShuttleManager.OnApplicationFocusChanged;

@@ -52,14 +52,16 @@ namespace HeavyLiquidShuttleMod
         }
     }
 
-    public static class ShuttleSearchDouble<TNetwork1, TNetwork2>
+    public static class ShuttleSearchDouble<TNetwork1, TNetwork2, TNetwork3>
         where TNetwork1 : class
         where TNetwork2 : class
+        where TNetwork3 : class
     {
-        public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out HashSet<TNetwork1> xNets, out HashSet<TNetwork2> yNets, Func<Thing, IntVec3, TNetwork1?> examineX, Func<Thing, IntVec3, TNetwork2?> examineY)
+        public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out HashSet<TNetwork1> xNets, out HashSet<TNetwork2> yNets, out HashSet<TNetwork3> zNets, Func<Thing, IntVec3, TNetwork1?> examineX, Func<Thing, IntVec3, TNetwork2?> examineY, Func<Thing, IntVec3, TNetwork3?> examineZ)
         {
             xNets = new HashSet<TNetwork1>();
             yNets = new HashSet<TNetwork2>();
+            zNets = new HashSet<TNetwork3>();
 
             if (shuttle == null)
                 return;
@@ -104,6 +106,11 @@ namespace HeavyLiquidShuttleMod
 
                     if (netY != null)
                         yNets.Add(netY);
+
+                    TNetwork3? netZ = examineZ(thing, adjTile);
+
+                    if (netZ != null)
+                        zNets.Add(netZ);
                 }
             }
         }

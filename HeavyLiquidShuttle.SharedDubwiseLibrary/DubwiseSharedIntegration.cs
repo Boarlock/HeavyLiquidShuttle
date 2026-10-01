@@ -13,9 +13,6 @@ namespace HeavyLiquidShuttleMod
         protected override StoredType LiquidTypeX => StoredType.Water;
         protected override StoredType LiquidTypeY => StoredType.Oil;
 
-        protected override void HandleHelixienTank(TankState tank) { }
-        protected override void ExplosiveCompSet() { }
-
         protected override void OnCleanup() => Shuttle.OilSpillIntegration -= StartOilSpill;
 
         protected override void FindAdjacentNetworksDouble(
