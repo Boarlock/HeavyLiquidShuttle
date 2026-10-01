@@ -8,7 +8,7 @@ namespace HeavyLiquidShuttleMod
     {
         public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out HashSet<PipeNet> xNets, out HashSet<PipeNet> yNets, out HashSet<PipeNet> zNets)
         {
-            ShuttleSearchDouble<PipeNet, PipeNet, PipeNet>.CheckCellsAroundShuttle(
+            ShuttleSearchTripleOut<PipeNet>.CheckCellsAroundShuttle(
                 shuttle,
                 out xNets,
                 out yNets,

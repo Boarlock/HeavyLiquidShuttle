@@ -34,12 +34,15 @@ namespace HeavyLiquidShuttleMod
             TankA.TransferEnabled = false;
             TankB.TransferEnabled = false;
 
-            if (HeavyLiquidShuttleMod.VEHelixienActive && explosiveCompSetMethod != null && veIntegration != null)
+            if (HeavyLiquidShuttleMod.VEHelixienActive)
             {
                 TankA.TankExplosiveness = TankA.GetHelixienState(out _);
                 TankB.TankExplosiveness = TankB.GetHelixienState(out _);
 
-                explosiveCompSetMethod.Invoke(veIntegration, null);
+                ShuttleExplosion explosion = parent.TryGetComp<ShuttleExplosion>();
+
+                if (explosion != null)
+                    explosion.UpdateExplosiveness();
             }
             else
             {
@@ -56,26 +59,14 @@ namespace HeavyLiquidShuttleMod
             bool vehelixActive = HeavyLiquidShuttleMod.VEHelixienActive;
 
             if (dbhActive && rimefellerActive && LibraryLoaders.DubwiseSharedIntegrationType != null)
-            {
                 sharedIntegration = Activator.CreateInstance(LibraryLoaders.DubwiseSharedIntegrationType, this);
-            }
             else if (dbhActive && LibraryLoaders.DBHIntegrationType != null)
-            {
                 dbhIntegration = Activator.CreateInstance(LibraryLoaders.DBHIntegrationType, this);
-            }
             else if (rimefellerActive && LibraryLoaders.RimefellerIntegrationType != null)
-            {
                 rimefellerIntegration = Activator.CreateInstance(LibraryLoaders.RimefellerIntegrationType, this);
-            }
 
             if ((vechemActive || vehelixActive) && LibraryLoaders.VESharedIntegrationType != null)
-            {
                 veIntegration = Activator.CreateInstance(LibraryLoaders.VESharedIntegrationType, this);
-
-
-
-                explosiveCompSetMethod = LibraryLoaders.VESharedIntegrationType.GetMethod("ExplosiveCompSet", BindingFlags.NonPublic | BindingFlags.Instance);
-            }
 
             initialized = true;
         }
@@ -90,7 +81,6 @@ namespace HeavyLiquidShuttleMod
         // Integration events
         public event Func<IEnumerable<Gizmo>>? GizmoIntegration;
         public event Action<float>? OilSpillIntegration;
-        MethodInfo? explosiveCompSetMethod;
 
 
         // Tank specific state data
