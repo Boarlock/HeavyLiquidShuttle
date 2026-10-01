@@ -80,7 +80,8 @@ namespace HeavyLiquidShuttleMod
 
         // Integration events
         public event Func<IEnumerable<Gizmo>>? GizmoIntegration;
-        public event Action<float>? OilSpillIntegration;
+        public event Action<float, IntVec3>? OilSpillIntegration;
+        public event Action<float, IntVec3>? SewageSpillIntegration;
 
 
         // Tank specific state data
@@ -102,7 +103,6 @@ namespace HeavyLiquidShuttleMod
         }
 
         // Used for Mod Integration special actions
-        public IntVec3 OilConnectionAt {  get; set; }
         private Detonate? detonation;
 
         // Helpers for returning Shuttle Tanks
@@ -231,8 +231,13 @@ namespace HeavyLiquidShuttleMod
                         }
                         else if (TankA.Content == StoredType.Oil)
                         {
-                            float amountToSpill = TankA.TankStorage;
-                            OilSpillIntegration?.Invoke(amountToSpill);
+                            IntVec3 spillCell = GetTankCell(true);
+                            OilSpillIntegration?.Invoke(TankA.TankStorage, spillCell);
+                        }
+                        else if (TankA.Content == StoredType.Sewage)
+                        {
+                            IntVec3 spillCell = GetTankCell(true);
+                            SewageSpillIntegration?.Invoke(TankA.TankStorage, spillCell);
                         }
 
                         TankA.Content = StoredType.Empty;
@@ -259,8 +264,13 @@ namespace HeavyLiquidShuttleMod
                         }
                         else if (TankB.Content == StoredType.Oil)
                         {
-                            float amountToSpill = TankB.TankStorage;
-                            OilSpillIntegration?.Invoke(amountToSpill);
+                            IntVec3 spillCell = GetTankCell(false);
+                            OilSpillIntegration?.Invoke(TankB.TankStorage, spillCell);
+                        }
+                        else if (TankB.Content == StoredType.Sewage)
+                        {
+                            IntVec3 spillCell = GetTankCell(false);
+                            SewageSpillIntegration?.Invoke(TankB.TankStorage, spillCell);
                         }
 
                         TankB.Content = StoredType.Empty;
@@ -372,70 +382,8 @@ namespace HeavyLiquidShuttleMod
 
         private void TryStartTankCleaning(bool handlingA)
         {
-            Rot4 shuttleOrientation = this.parent.Rotation;
-            int cell = 0;
-            IntVec3 jobCell = new IntVec3(0, 0, 0);
             IntVec3 refCell = this.parent.OccupiedRect().First();
-
-            if (handlingA)
-            {
-                switch (shuttleOrientation.AsInt)
-                {
-                    case 0:
-                        cell = 3;
-                        break;
-                    case 2:
-                        cell = 14;
-                        break;
-                    case 1:
-                        cell = 13;
-                        break;
-                    case 3:
-                        cell = 4;
-                        break;
-                }
-            }
-            else if (!handlingA)
-            {
-                switch (shuttleOrientation.AsInt)
-                {
-                    case 0:
-                        cell = 5;
-                        break;
-                    case 2:
-                        cell = 12;
-                        break;
-                    case 1:
-                        cell = 1;
-                        break;
-                    case 3:
-                        cell = 16;
-                        break;
-                }
-            }
-
-            if (cell == 0)
-            {
-                if (handlingA)
-                    CleaningTankA = false;
-                else
-                    CleaningTankB = false;
-
-                return;
-            }
-
-            int i = 0;
-
-            foreach (IntVec3 shuttleCell in this.parent.OccupiedRect())
-            {
-                if (cell == i)
-                {
-                    jobCell = shuttleCell;
-                    break;
-                }
-                i++;
-            }
-            
+            IntVec3 jobCell = GetTankCell(handlingA);
 
             if (!jobCell.IsValid)
             {
@@ -445,7 +393,7 @@ namespace HeavyLiquidShuttleMod
             }
 
             LocalTargetInfo jobTargetA = new LocalTargetInfo(jobCell);
-            LocalTargetInfo jobTargetB = new LocalTargetInfo(this.parent);
+            LocalTargetInfo jobTargetB = new LocalTargetInfo(parent);
             LocalTargetInfo jobTargetC = new LocalTargetInfo(refCell);
 
             Job job = JobMaker.MakeJob(CleanShuttleTank.CleanTank, jobTargetA, jobTargetB, jobTargetC);
@@ -453,7 +401,7 @@ namespace HeavyLiquidShuttleMod
             Pawn? closestColonist = null;
             float closestDistance = float.MaxValue;
 
-            foreach (Pawn candidate in this.parent.Map.mapPawns.FreeColonistsSpawned)
+            foreach (Pawn candidate in parent.Map.mapPawns.FreeColonistsSpawned)
             {
                 if (candidate.Dead || candidate.Downed)
                     continue;
@@ -487,6 +435,65 @@ namespace HeavyLiquidShuttleMod
                 else
                     CleaningTankB = false;
             }
+        }
+
+        private IntVec3 GetTankCell(bool tankA)
+        {
+            Rot4 shuttleOrientation = parent.Rotation;
+            int cell = 0;
+            IntVec3 tankCell = new IntVec3(-1, -1, -1);
+
+            if (tankA)
+            {
+                switch (shuttleOrientation.AsInt)
+                {
+                    case 0:
+                        cell = 3;
+                        break;
+                    case 2:
+                        cell = 14;
+                        break;
+                    case 1:
+                        cell = 13;
+                        break;
+                    case 3:
+                        cell = 4;
+                        break;
+                }
+            }
+            else
+            {
+                switch (shuttleOrientation.AsInt)
+                {
+                    case 0:
+                        cell = 5;
+                        break;
+                    case 2:
+                        cell = 12;
+                        break;
+                    case 1:
+                        cell = 1;
+                        break;
+                    case 3:
+                        cell = 16;
+                        break;
+                }
+            }
+            if (cell == 0)
+                return tankCell;
+
+            int i = 0;
+
+            foreach (IntVec3 shuttleCell in this.parent.OccupiedRect())
+            {
+                if (cell == i)
+                {
+                    tankCell = shuttleCell;
+                    break;
+                }
+                i++;
+            }
+            return tankCell;
         }
 
         // Displays tank contents

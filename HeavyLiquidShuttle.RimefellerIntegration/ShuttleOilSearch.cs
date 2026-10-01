@@ -14,9 +14,6 @@ namespace HeavyLiquidShuttleMod
             {
                 CompPipe? pipe = thing.TryGetComp<CompPipe>();
 
-                if (pipe != null)
-                    shuttle.OilConnectionAt = cell;
-
                 return pipe?.pipeNet;
             });
         }

@@ -9,7 +9,8 @@ namespace HeavyLiquidShuttleMod
 {
     public class DubsBadHygieneIntegration : LiquidIntegrationSingle<PlumbingNet, CompWaterStorage>
     {
-        public DubsBadHygieneIntegration(HeavyLiquidShuttle shuttle) : base(shuttle) {  }
+        public DubsBadHygieneIntegration(HeavyLiquidShuttle shuttle) : base(shuttle) => Shuttle.SewageSpillIntegration += StartSewageSpill;
+        protected override void OnCleanup() => Shuttle.SewageSpillIntegration -= StartSewageSpill;
 
         protected override StoredType LiquidTypeX => StoredType.Water;
         private StoredType LiquidTypeY => StoredType.Sewage;
@@ -363,6 +364,16 @@ namespace HeavyLiquidShuttleMod
             else if (Shuttle.TankB.Content == LiquidTypeY && Shuttle.TankB.TankStorage > 0f)
                 yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, "Tank B", LiquidTypeY)!;
 
+        }
+
+        private void StartSewageSpill(float spilledAmount, IntVec3 spillCell)
+        {
+            if (!spillCell.IsValid)
+                return;
+
+            MapComponent_Hygiene comp = Shuttle.parent.Map.GetComponent<MapComponent_Hygiene>();
+
+            comp.SewageGrid.AddAt(spillCell, spilledAmount);
         }
     }
 }

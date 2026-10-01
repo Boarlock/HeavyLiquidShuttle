@@ -1,5 +1,6 @@
 ﻿using Rimefeller;
 using UnityEngine;
+using Verse;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -58,16 +59,16 @@ namespace HeavyLiquidShuttleMod
             return transferred;
         }
 
-        private void StartOilSpill(float spilledAmount)
+        private void StartOilSpill(float spilledAmount, IntVec3 spillCell)
         {
-            if (!Shuttle.OilConnectionAt.IsValid)
+            if (!spillCell.IsValid)
                 return;
 
             MapComponent_Rimefeller comp = Shuttle.parent.Map.Rimefeller();
 
-            float current = comp.OilSpillGrid.ValueAt(Shuttle.OilConnectionAt);
+            float current = comp.OilSpillGrid.ValueAt(spillCell);
 
-            comp.OilSpillGrid.SetAt(Shuttle.OilConnectionAt, current + spilledAmount);
+            comp.OilSpillGrid.SetAt(spillCell, current + spilledAmount);
         }
     }
 }
