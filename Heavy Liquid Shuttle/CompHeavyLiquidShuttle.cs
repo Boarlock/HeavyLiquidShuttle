@@ -144,9 +144,6 @@ namespace HeavyLiquidShuttleMod
 
             switch (TankA.Content)
             {
-                case StoredType.Water:
-                    totalMass += TankA.TankStorage;
-                    break;
                 case StoredType.Oil:
                     totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.CrudeMassPerLiter;
                     break;
@@ -158,6 +155,9 @@ namespace HeavyLiquidShuttleMod
                     break;
                 case StoredType.Scarlet:
                     totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.ScarletMassPerLiter;
+                    break;
+                default: // Water or Sewage
+                    totalMass += TankA.TankStorage;
                     break;
             }
 

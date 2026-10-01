@@ -30,6 +30,7 @@ namespace HeavyLiquidShuttleMod
     {
         Empty,
         Water,
+        Sewage,
         Oil,
         Deepchem,
         Helixien,

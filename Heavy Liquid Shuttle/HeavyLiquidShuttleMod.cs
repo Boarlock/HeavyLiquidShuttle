@@ -22,18 +22,14 @@ namespace HeavyLiquidShuttleMod
 
             DubsBadHygieneActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Dubwise.DubsBadHygiene");
             RimefellerActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Dubwise.Rimefeller");
-
-            if (DubsBadHygieneActive && RimefellerActive)
-                LibraryLoaders.SharedDubLoad();
-            else if (DubsBadHygieneActive)
-                LibraryLoaders.DBHLoad();
-            else if (RimefellerActive)
-                LibraryLoaders.RFLoad();
-
             VEChemfuelActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.VChemfuelE");
             VEHelixienActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.HelixienGas");
             VEScarletActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Ushanka.LuciferiumExpansion");
 
+            if (DubsBadHygieneActive)
+                LibraryLoaders.DBHLoad();
+            if (RimefellerActive)
+                LibraryLoaders.RFLoad();
             if (VEChemfuelActive || VEHelixienActive || VEScarletActive)
                 LibraryLoaders.VELoad();
 
@@ -103,33 +99,6 @@ namespace HeavyLiquidShuttleMod
             catch (Exception ex)
             {
                 Log.Error("[HeavyLiquidShuttle] Failed to load Rimefeller integration: " + ex);
-            }
-        }
-
-        public static void SharedDubLoad()
-        {
-            string coreAssemblyPath = typeof(LibraryLoaders).Assembly.Location;
-            string coreDirectory = Path.GetDirectoryName(coreAssemblyPath);
-
-            string integrationPath = Path.Combine(coreDirectory, "..", "--optional", "Dubwise", "HeavyLiquidShuttle.SharedDubwiseLibrary.dll");
-            integrationPath = Path.GetFullPath(integrationPath);
-
-            Log.Message("[HeavyLiquidShuttle] Dubs Bad Hygiene and Rimefeller detected, preparing to load.");
-
-            if (!File.Exists(integrationPath))
-            {
-                Log.Message("[HeavyLiquidShuttle] Dubwise shared integration not found.");
-                return;
-            }
-
-            try
-            {
-                Assembly assembly = Assembly.LoadFrom(integrationPath);
-                DubwiseSharedIntegrationType = assembly.GetType("HeavyLiquidShuttleMod.DubwiseSharedIntegration");
-            }
-            catch (Exception ex)
-            {
-                Log.Error("[HeavyLiquidShuttle] Failed to load Dubwise shared integration: " + ex);
             }
         }
 
