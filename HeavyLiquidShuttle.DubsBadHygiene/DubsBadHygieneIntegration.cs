@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Verse;
 using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
@@ -343,6 +344,25 @@ namespace HeavyLiquidShuttleMod
                 tank.IsContaminated = true;
 
             return transferred;
+        }
+
+        protected override IEnumerable<Gizmo> AddGizmos()
+        {
+            if (AdjacentXNets.Count <= 0)
+                yield break;
+
+            if (Shuttle.TankA.Content == LiquidTypeX && Shuttle.TankA.TankStorage > 0f)
+                yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, "Tank A", LiquidTypeX)!;
+
+            else if (Shuttle.TankA.Content == LiquidTypeY && Shuttle.TankA.TankStorage > 0f)
+                yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, "Tank A", LiquidTypeY)!;
+
+            if (Shuttle.TankB.Content == LiquidTypeX && Shuttle.TankB.TankStorage > 0f)
+                yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, "Tank B", LiquidTypeX)!;
+
+            else if (Shuttle.TankB.Content == LiquidTypeY && Shuttle.TankB.TankStorage > 0f)
+                yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, "Tank B", LiquidTypeY)!;
+
         }
     }
 }
