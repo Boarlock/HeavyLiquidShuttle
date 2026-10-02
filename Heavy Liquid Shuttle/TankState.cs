@@ -13,7 +13,6 @@ namespace HeavyLiquidShuttleMod
 
         public Storage props;
         public float tankStorage = 0f;
-        public float pressure = 0f;
 
         public bool isLocked;
         public bool transferEnabled;
@@ -25,18 +24,31 @@ namespace HeavyLiquidShuttleMod
         public StoredTypeDef? content;
 
         public WaterState waterQuality = WaterState.Untreated;
-        public HelixienState tankExplosiveness = HelixienState.None;
+
+        public void ExposeData()
+        {
+            Scribe_Values.Look(ref tankStorage, "tankStorage", 0f);
+            Scribe_Defs.Look(ref content, "content");
+
+            Scribe_Values.Look(ref isLocked, "isLocked", false);
+            Scribe_Values.Look(ref isContaminated, "isContaminated", false);
+
+            Scribe_Values.Look(ref props.physicalCapacity, "physicalCapacity", 1250f);
+
+            Scribe_Values.Look(ref waterQuality, "waterQuality", WaterState.Untreated);
+        }
 
         public class Storage
         {
             public float physicalCapacity = 1250f;
-            public float pressureRating = 150f;
         }
+
         public class StoredTypeDef : Def
         {
             public float unitsPerLiter;
             public float density;
-            public bool compressible;
+
+            public float unitsPerExplosionRadius;
         }
 
         public enum WaterState
@@ -44,58 +56,6 @@ namespace HeavyLiquidShuttleMod
             Treated,
             Untreated,
             Contaminated
-        }
-        public enum HelixienState
-        {
-            None,
-            Low,
-            Moderate,
-            High
-        }
-
-        public HelixienState GetHelixienState(out bool stateChanged)
-        {
-            HelixienState oldState = tankExplosiveness;
-            HelixienState newState;
-            stateChanged = false;
-
-            if (tankStorage < 100f)
-                newState = HelixienState.None;
-
-            else if (tankStorage < 250f)
-                newState = HelixienState.Low;
-
-            else if (tankStorage < 500f)
-                newState = HelixienState.Moderate;
-
-            else
-                newState = HelixienState.High;
-
-            if (oldState != newState)
-                stateChanged = true;
-
-            return newState;
-        }
-        public int GetExplosiveness()
-        {
-            int total = 0;
-
-            switch (tankExplosiveness)
-            {
-                case HelixienState.Low:
-                    total++;
-                    break;
-                case HelixienState.Moderate:
-                    total += 2;
-                    break;
-                case HelixienState.High:
-                    total += 3;
-                    break;
-                default:
-                    return 0;
-            }
-
-            return total;
         }
 
         //Helpers to convert units to liters and vice versa

@@ -208,6 +208,13 @@ namespace HeavyLiquidShuttleMod
             tank.supplyAllowance -= litersTransferred;
             MassPatch.NotifyLiquidMassChanged(Shuttle);
 
+            if (LiquidTypeX == CachedDefs.Oil)
+            {
+                ShuttleExplosion comp = Shuttle.parent.TryGetComp<ShuttleExplosion>();
+                if (comp != null)
+                    comp.UpdateExplosiveness();
+            }
+
             if (tank.tankStorage <= 0f)
             {
                 tank.tankStorage = 0f;
@@ -240,6 +247,13 @@ namespace HeavyLiquidShuttleMod
             tank.tankStorage += litersTransferred;
             tank.receiveAllowance -= litersTransferred;
             MassPatch.NotifyLiquidMassChanged(Shuttle);
+
+            if (LiquidTypeX == CachedDefs.Oil)
+            {
+                ShuttleExplosion comp = Shuttle.parent.TryGetComp<ShuttleExplosion>();
+                if (comp != null)
+                    comp.UpdateExplosiveness();
+            }
         }
 
         protected virtual IEnumerable<Gizmo> AddGizmos()

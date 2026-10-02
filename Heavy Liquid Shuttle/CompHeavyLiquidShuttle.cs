@@ -1,4 +1,5 @@
 ﻿using RimWorld;
+using RimWorld.Planet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,21 +35,6 @@ namespace HeavyLiquidShuttleMod
             TankA.transferEnabled = false;
             TankB.transferEnabled = false;
 
-            if (TankA.content == CachedDefs.Helixien || TankB.content == CachedDefs.Helixien)
-            {
-                TankA.tankExplosiveness = TankA.GetHelixienState(out _);
-                TankB.tankExplosiveness = TankB.GetHelixienState(out _);
-
-                ShuttleExplosion explosion = parent.TryGetComp<ShuttleExplosion>();
-
-                if (explosion != null)
-                    explosion.UpdateExplosiveness();
-            }
-            else
-            {
-                TankA.tankExplosiveness = TankState.HelixienState.None;
-                TankB.tankExplosiveness = TankState.HelixienState.None;
-            }
         }
 
         private void CreateIntegrations()
@@ -76,6 +62,12 @@ namespace HeavyLiquidShuttleMod
             initialized = true;
         }
 
+        public override void Initialize(CompProperties props)
+        {
+            base.Initialize(props);
+            explosionComponent = parent.TryGetComp<ShuttleExplosion>();
+        }
+
         // Integration instances
         internal object? sharedIntegration;
         internal object? dbhIntegration;
@@ -87,6 +79,10 @@ namespace HeavyLiquidShuttleMod
         public event Func<IEnumerable<Gizmo>>? GizmoIntegration;
         public event Action<float, IntVec3>? OilSpillIntegration;
         public event Action<float, IntVec3>? SewageSpillIntegration;
+
+
+        // Explosion Component
+        private ShuttleExplosion? explosionComponent;
 
 
         // Tank specific state data
@@ -207,9 +203,9 @@ namespace HeavyLiquidShuttleMod
                         }
 
                         TankA.content = null;
-                        TankA.tankExplosiveness = TankState.HelixienState.None;
                         TankA.tankStorage = 0f;
                         TankA.transferEnabled = false;
+                        explosionComponent?.UpdateExplosiveness();
                     }
                 };
             }
@@ -240,9 +236,9 @@ namespace HeavyLiquidShuttleMod
                         }
 
                         TankB.content = null;
-                        TankB.tankExplosiveness = TankState.HelixienState.None;
                         TankB.tankStorage = 0f;
                         TankB.transferEnabled = false;
+                        explosionComponent?.UpdateExplosiveness();
                     }
                 };
             }
@@ -488,23 +484,6 @@ namespace HeavyLiquidShuttleMod
             else
                 tankB = $"Tank B: {TankB.content} |  Capacity: {TankB.tankStorage:F0} / {TankB.props.physicalCapacity} Liters";
 
-            if (TankA.content == CachedDefs.Helixien || TankB.content == CachedDefs.Helixien)
-            {
-                int totalExplosiveness = TankA.GetExplosiveness() + TankB.GetExplosiveness();
-                string explosiveness;
-
-                if (totalExplosiveness >= 5)
-                    explosiveness = "\nExplosiveness: High";
-                else if (totalExplosiveness >= 3)
-                    explosiveness = "\nExplosiveness: Moderate";
-                else if (totalExplosiveness >= 1)
-                    explosiveness = "\nExplosiveness: Low";
-                else
-                    explosiveness = "\nExplosiveness: None";
-
-                return tankA + tankB + explosiveness;
-            }
-
             return tankA + tankB;
         }
 
@@ -512,10 +491,10 @@ namespace HeavyLiquidShuttleMod
         {
             base.PostPostApplyDamage(dinfo, totalDamageDealt);
 
-            ShuttleExplosion c = this.parent.TryGetComp<ShuttleExplosion>();
-
-            if (c == null || c.explosiveness == TankState.HelixienState.None || parent.HitPoints / (float)parent.MaxHitPoints >
-                c.Props.startWickHitPointsPercent || detonation != null)
+            if (explosionComponent == null ||
+                explosionComponent.ExplosionRadius <= 0 ||
+                detonation != null ||
+                parent.HitPoints / (float)parent.MaxHitPoints > explosionComponent.Props.startWickHitPointsPercent)
                 return;
 
             detonation = new Detonate(this);
@@ -529,29 +508,97 @@ namespace HeavyLiquidShuttleMod
 
         public override void PostExposeData()
         {
-            Scribe_Values.Look(ref TankA.tankStorage, "tankAStorage", 0f);
-            Scribe_Values.Look(ref TankB.tankStorage, "tankBStorage", 0f);
+            Scribe_Deep.Look(ref TankA, "tankA");
+            Scribe_Deep.Look(ref TankB, "tankB");
 
-            Scribe_Values.Look(ref TankA.content, "tankAContent", null);
-            Scribe_Values.Look(ref TankB.content, "tankBContent", null);
+            if (Scribe.mode == LoadSaveMode.LoadingVars)
+            {
+                // Old migration code for backwards compatibility
+                Scribe_Values.Look(ref oldTankAStorage, "tankAStorage", 0f);
+                Scribe_Values.Look(ref oldTankBStorage, "tankBStorage", 0f);
+                Scribe_Values.Look(ref oldTankAContent, "tankAContent", StoredType.Empty);
+                Scribe_Values.Look(ref oldTankBContent, "tankBContent", StoredType.Empty);
+                Scribe_Values.Look(ref oldTankALocked, "tankALocked", false);
+                Scribe_Values.Look(ref oldTankBLocked, "tankBLocked", false);
+                Scribe_Values.Look(ref oldTankAContamination, "tankAContaminated", false);
+                Scribe_Values.Look(ref oldTankBContamination, "tankBContaminated", false);
+                Scribe_Values.Look(ref oldTankACapacity, "tankACapacity", 1250f);
+                Scribe_Values.Look(ref oldTankBCapacity, "tankBCapacity", 1250f);
+                Scribe_Values.Look(ref oldTankAWaterQuality, "tankAWaterQuality", TankState.WaterState.Untreated);
+                Scribe_Values.Look(ref oldTankBWaterQuality, "tankBWaterQuality", TankState.WaterState.Untreated);
+            }
 
-            Scribe_Values.Look(ref TankA.isLocked, "tankALocked", false);
-            Scribe_Values.Look(ref TankB.isLocked, "tankBLocked", false);
+            if (Scribe.mode == LoadSaveMode.PostLoadInit)
+            {
+                TankA.isLocked = oldTankALocked;
+                TankB.isLocked = oldTankBLocked;
 
-            Scribe_Values.Look(ref TankA.isContaminated, "tankAContaminated", false);
-            Scribe_Values.Look(ref TankB.isContaminated, "tankBContaminated", false);
+                TankA.isContaminated = oldTankAContamination;
+                TankB.isContaminated = oldTankBContamination;
 
-            Scribe_Values.Look(ref TankA.props.physicalCapacity, "tankACapacity", 1250f);
-            Scribe_Values.Look(ref TankB.props.physicalCapacity, "tankBCapacity", 1250f);
+                if (oldTankAContent != StoredType.Empty)
+                    TankA.content = ConvertOldStoredType(oldTankAContent);
 
-            Scribe_Values.Look(ref TankA.props.pressureRating, "tankAPressureRating", 150f);
-            Scribe_Values.Look(ref TankB.props.pressureRating, "tankBPressurRating", 150f);
+                if (oldTankBContent != StoredType.Empty)
+                    TankB.content = ConvertOldStoredType(oldTankBContent);
 
-            Scribe_Values.Look(ref TankA.waterQuality, "tankAWaterQuality", TankState.WaterState.Untreated);
-            Scribe_Values.Look(ref TankB.waterQuality, "tankBWaterQuality", TankState.WaterState.Untreated);
+                if (oldTankAStorage > 0f)
+                    TankA.tankStorage = oldTankAStorage;
 
-            Scribe_Values.Look(ref TankA.tankExplosiveness, "tankAExplosiveness", TankState.HelixienState.None);
-            Scribe_Values.Look(ref TankB.tankExplosiveness, "tankBExplosiveness", TankState.HelixienState.None);
+                if (oldTankBStorage > 0f)
+                    TankB.tankStorage = oldTankBStorage;
+
+                if (oldTankACapacity != 1250f)
+                    TankA.props.physicalCapacity = oldTankACapacity;
+
+                if (oldTankBCapacity != 1250f)
+                    TankB.props.physicalCapacity = oldTankBCapacity;
+
+                if (oldTankAWaterQuality != TankState.WaterState.Untreated)
+                    TankA.waterQuality = oldTankAWaterQuality;
+
+                if (oldTankBWaterQuality != TankState.WaterState.Untreated)
+                    TankB.waterQuality = oldTankBWaterQuality;
+            }
         }
+
+        public enum StoredType
+        {
+            Empty,      // 0
+            Water,      // 1
+            Sewage,     // 2
+            Oil,        // 3
+            Deepchem,   // 4
+            Helixien,   // 5
+            Scarlet     // 6
+        }
+
+        private static TankState.StoredTypeDef? ConvertOldStoredType(StoredType oldType)
+        {
+            return oldType switch
+            {
+                StoredType.Empty => null,
+                StoredType.Water => CachedDefs.Water,
+                StoredType.Sewage => CachedDefs.Sewage,
+                StoredType.Oil => CachedDefs.Oil,
+                StoredType.Deepchem => CachedDefs.Deepchem,
+                StoredType.Helixien => CachedDefs.Helixien,
+                StoredType.Scarlet => CachedDefs.Scarlet,
+                _ => null
+            };
+        }
+
+        private float oldTankAStorage;
+        private float oldTankBStorage;
+        private StoredType oldTankAContent;
+        private StoredType oldTankBContent;
+        private bool oldTankAContamination;
+        private bool oldTankBContamination;
+        private TankState.WaterState oldTankAWaterQuality;
+        private TankState.WaterState oldTankBWaterQuality;
+        private bool oldTankALocked;
+        private bool oldTankBLocked;
+        private float oldTankACapacity;
+        private float oldTankBCapacity;
     }
 }

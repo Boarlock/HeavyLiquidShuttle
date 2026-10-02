@@ -69,6 +69,8 @@ namespace HeavyLiquidShuttleMod
             {
                 case "Deepchem":
                     return CachedDefs.Deepchem;
+                case "Chemfuel":
+                    return CachedDefs.Chemfuel;
                 case "Helixien gas":
                     return CachedDefs.Helixien;
                 case "Scarlet sludge":

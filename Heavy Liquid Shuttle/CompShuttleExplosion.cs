@@ -1,4 +1,5 @@
 ﻿using RimWorld;
+using UnityEngine;
 using System;
 using Verse;
 
@@ -12,35 +13,26 @@ namespace HeavyLiquidShuttleMod
         public float armorPenetrationBase = -1f;
         public SoundDef? explosionSound;
 
-        public bool doVisualEffects = true;
-        public bool doSoundEffects = true;
-        public float propagationSpeed = 1f;
+        public bool doVisualEffects;
+        public bool doSoundEffects;
+        public float propagationSpeed;
 
         // Wick
-        public float startWickHitPointsPercent = 0.2f;
-        public IntRange wickTicks = new IntRange(140, 150);
+        public float startWickHitPointsPercent;
+        public IntRange wickTicks;
 
         // Pre/post explosion
         public ThingDef? preExplosionSpawnThingDef;
         public float preExplosionSpawnChance;
-        public int preExplosionSpawnThingCount = 1;
+        public int preExplosionSpawnThingCount;
 
         public ThingDef? postExplosionSpawnThingDef;
         public float postExplosionSpawnChance;
-        public int postExplosionSpawnThingCount = 1;
+        public int postExplosionSpawnThingCount;
 
         public bool applyDamageToExplosionCellsNeighbors;
         public float chanceToStartFire;
         public bool damageFalloff;
-
-        // Helixien explosiveness tiers
-        public int lowExplosiveRadius = 4;
-        public int moderateExplosiveRadius = 7;
-        public int highExplosiveRadius = 10;
-
-        public int lowDestroyThingOnExplosionSize;
-        public int moderateDestroyThingOnExplosionSize;
-        public int highDestroyThingOnExplosionSize;
 
         public CompProperties_ShuttleExplosive()
         {
@@ -58,43 +50,23 @@ namespace HeavyLiquidShuttleMod
 
     public class ShuttleExplosion : ThingComp
     {
-        public TankState.HelixienState explosiveness;
-        public int explosionRadius;
-        public int destroyThingOnExplosionSize;
+        private int explosionRadius;
+        public int ExplosionRadius => explosionRadius;
 
         public CompProperties_ShuttleExplosive Props => (CompProperties_ShuttleExplosive)props;
         public HeavyLiquidShuttle Shuttle => parent.GetComp<HeavyLiquidShuttle>();
 
         public void UpdateExplosiveness()
         {
-            int totalExplosiveness = Shuttle.TankA.GetExplosiveness() + Shuttle.TankB.GetExplosiveness();
+            int tankAExplosionRadius = Mathf.RoundToInt(Shuttle.TankA.content != null ? (Shuttle.TankA.tankStorage / Shuttle.TankA.content.unitsPerExplosionRadius) : 0);
+            int tankBExplosionRadius = Mathf.RoundToInt(Shuttle.TankB.content != null ? (Shuttle.TankB.tankStorage / Shuttle.TankB.content.unitsPerExplosionRadius) : 0);
 
-            if (totalExplosiveness <= 0)
-            {
-                explosiveness = TankState.HelixienState.None;
-                destroyThingOnExplosionSize = 0;
-                explosionRadius = 0;
-                return;
-            }
+            explosionRadius = tankAExplosionRadius + tankBExplosionRadius;
+        }
 
-            if (totalExplosiveness >= 5)
-            {
-                explosiveness = TankState.HelixienState.High;
-                destroyThingOnExplosionSize = Props.highDestroyThingOnExplosionSize;
-                explosionRadius = Props.highExplosiveRadius;
-            }
-            else if (totalExplosiveness >= 3)
-            {
-                explosiveness = TankState.HelixienState.Moderate;
-                destroyThingOnExplosionSize = Props.moderateDestroyThingOnExplosionSize;
-                explosionRadius = Props.moderateExplosiveRadius;
-            }
-            else if (totalExplosiveness >= 1)
-            {
-                explosiveness = TankState.HelixienState.Low;
-                destroyThingOnExplosionSize = Props.lowDestroyThingOnExplosionSize;
-                explosionRadius = Props.lowExplosiveRadius;
-            }
+        public override void PostExposeData()
+        {
+            Scribe_Values.Look(ref explosionRadius, "explosionRadius", 0);
         }
     }
 }

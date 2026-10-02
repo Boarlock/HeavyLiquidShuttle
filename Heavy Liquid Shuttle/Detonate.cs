@@ -76,7 +76,7 @@ namespace HeavyLiquidShuttleMod
             GenExplosion.DoExplosion(
                     shuttle.parent.PositionHeld,
                     shuttle.parent.MapHeld,
-                    Comp.explosionRadius,
+                    Comp.ExplosionRadius,
                     Props.explosiveDamageType,
                     wickInstigator,
                     Props.damageAmountBase,

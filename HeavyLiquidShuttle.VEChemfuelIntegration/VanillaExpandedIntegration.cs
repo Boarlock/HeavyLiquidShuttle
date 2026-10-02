@@ -35,7 +35,10 @@ namespace HeavyLiquidShuttleMod
             this.shuttle.GizmoIntegration += AddGizmos;
 
             if (HeavyLiquidShuttleMod.VEChemfuelActive)
+            {
                 resources.Add(new VEResource { def = DefDatabase<StoredTypeDef>.GetNamed("Deepchem") });
+                resources.Add(new VEResource { def = DefDatabase<StoredTypeDef>.GetNamed("Chemfuel") });
+            }
 
             if (HeavyLiquidShuttleMod.VEHelixienActive)
                 resources.Add(new VEResource { def = DefDatabase<StoredTypeDef>.GetNamed("Helixien") });
@@ -313,9 +316,17 @@ namespace HeavyLiquidShuttleMod
                 tank.tankStorage += litersTransferred;
                 tank.receiveAllowance -= litersTransferred;
             }
-            
-            HandleHelixienTank(tank);
+
             MassPatch.NotifyLiquidMassChanged(shuttle);
+
+            if (resource.def == CachedDefs.Scarlet)
+                return;
+            
+            ShuttleExplosion comp = shuttle.parent.TryGetComp<ShuttleExplosion>();
+
+            if (comp != null)
+                comp.UpdateExplosiveness();
+            
         }
 
         private float ModifyStorage(VEResource resource, CompResourceStorage storage, TankState tank, float amount, bool addTo)
@@ -335,24 +346,12 @@ namespace HeavyLiquidShuttleMod
 
             if (transferred > 0f && 
                 !tank.isContaminated && 
-                resource.def == CachedDefs.Deepchem || 
+                resource.def == CachedDefs.Deepchem ||
+                resource.def == CachedDefs.Chemfuel ||
                 resource.def == CachedDefs.Astrofuel)
                 tank.isContaminated = true;
 
             return transferred;
-        }
-
-        private void HandleHelixienTank(TankState tank)
-        {
-            tank.tankExplosiveness = tank.GetHelixienState(out bool stateChanged);
-
-            if (!stateChanged)
-                return;
-
-            ShuttleExplosion explosion = shuttle.parent.TryGetComp<ShuttleExplosion>();
-
-            if (explosion != null)
-                explosion.UpdateExplosiveness();
         }
 
         private IEnumerable<Gizmo> AddGizmos()
