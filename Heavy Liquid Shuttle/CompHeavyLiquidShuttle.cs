@@ -2,10 +2,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using UnityEngine;
 using Verse;
 using Verse.AI;
+using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -31,13 +31,13 @@ namespace HeavyLiquidShuttleMod
                 CreateIntegrations();
             }
 
-            TankA.TransferEnabled = false;
-            TankB.TransferEnabled = false;
+            TankA.transferEnabled = false;
+            TankB.transferEnabled = false;
 
-            if (HeavyLiquidShuttleMod.VEHelixienActive)
+            if (TankA.content == CachedDefs.Helixien || TankB.content == CachedDefs.Helixien)
             {
-                TankA.TankExplosiveness = TankA.GetHelixienState(out _);
-                TankB.TankExplosiveness = TankB.GetHelixienState(out _);
+                TankA.tankExplosiveness = TankA.GetHelixienState(out _);
+                TankB.tankExplosiveness = TankB.GetHelixienState(out _);
 
                 ShuttleExplosion explosion = parent.TryGetComp<ShuttleExplosion>();
 
@@ -46,8 +46,8 @@ namespace HeavyLiquidShuttleMod
             }
             else
             {
-                TankA.TankExplosiveness = TankState.HelixienState.None;
-                TankB.TankExplosiveness = TankState.HelixienState.None;
+                TankA.tankExplosiveness = TankState.HelixienState.None;
+                TankB.tankExplosiveness = TankState.HelixienState.None;
             }
         }
 
@@ -57,15 +57,20 @@ namespace HeavyLiquidShuttleMod
             bool rimefellerActive = HeavyLiquidShuttleMod.RimefellerActive;
             bool vechemActive = HeavyLiquidShuttleMod.VEChemfuelActive;
             bool vehelixActive = HeavyLiquidShuttleMod.VEHelixienActive;
+            bool vescarletActive = HeavyLiquidShuttleMod.VEScarletActive;
+            bool vegravshipActive = HeavyLiquidShuttleMod.VEGravshipActive;
 
-            if (dbhActive && rimefellerActive && LibraryLoaders.DubwiseSharedIntegrationType != null)
-                sharedIntegration = Activator.CreateInstance(LibraryLoaders.DubwiseSharedIntegrationType, this);
-            else if (dbhActive && LibraryLoaders.DBHIntegrationType != null)
+            if (dbhActive && LibraryLoaders.DBHIntegrationType != null)
                 dbhIntegration = Activator.CreateInstance(LibraryLoaders.DBHIntegrationType, this);
-            else if (rimefellerActive && LibraryLoaders.RimefellerIntegrationType != null)
+
+            if (rimefellerActive && LibraryLoaders.RimefellerIntegrationType != null)
                 rimefellerIntegration = Activator.CreateInstance(LibraryLoaders.RimefellerIntegrationType, this);
 
-            if ((vechemActive || vehelixActive) && LibraryLoaders.VESharedIntegrationType != null)
+            if ((vechemActive || 
+                vehelixActive || 
+                vescarletActive || 
+                vegravshipActive) && 
+                LibraryLoaders.VESharedIntegrationType != null)
                 veIntegration = Activator.CreateInstance(LibraryLoaders.VESharedIntegrationType, this);
 
             initialized = true;
@@ -93,96 +98,57 @@ namespace HeavyLiquidShuttleMod
         // Toggle for when a Shuttle Tank is actively transferring
         public void ToggleTransfer(TankState tank)
         {
-            tank.TransferEnabled = !tank.TransferEnabled;
+            tank.transferEnabled = !tank.transferEnabled;
         }
 
         // Toggle for when a Shuttle Tank is actively locked
         public void ToggleLock(TankState tank)
         {
-            tank.IsLocked = !tank.IsLocked;
+            tank.isLocked = !tank.isLocked;
         }
 
         // Used for Mod Integration special actions
         private Detonate? detonation;
 
         // Helpers for returning Shuttle Tanks
-        public TankState? GetTankForReceive(StoredType type)
+        public TankState? GetTankForReceive(StoredTypeDef def)
         {
-            if (!TankA.IsLocked)
+            if (!TankA.isLocked)
             {
-                if (TankA.Content == type && TankA.TankStorage < TankA.TankCapacity)
+                if (TankA.content == null)
                     return TankA;
 
-                if (TankA.Content == StoredType.Empty)
+                if (TankA.content == def && TankA.tankStorage < TankA.props.physicalCapacity)
                     return TankA;
             }
 
-            if (!TankB.IsLocked)
+            if (!TankB.isLocked)
             {
-                if (TankB.Content == type && TankB.TankStorage < TankB.TankCapacity)
+                if (TankB.content == null)
                     return TankB;
 
-                if (TankB.Content == StoredType.Empty)
+                if (TankB.content == def && TankB.tankStorage < TankB.props.physicalCapacity)
                     return TankB;
             }
             return null;
         }
-        public TankState? GetTankForSupply(StoredType type)
+        public TankState? GetTankForSupply(StoredTypeDef def)
         {
-            if (TankA.Content == type && TankA.TankStorage > 0f && !TankA.IsLocked)
+            if (TankA.content != null && 
+                TankA.content == def && 
+                TankA.tankStorage > 0f && 
+                !TankA.isLocked)
                 return TankA;
 
-            if (TankB.Content == type && TankB.TankStorage > 0f && !TankB.IsLocked)
+            if (TankB.content != null && 
+                TankB.content == def && 
+                TankB.tankStorage > 0f && 
+                !TankB.isLocked)
                 return TankB;
             
             return null;
         }
 
-        public float CalculateMassFromTanks()
-        {
-            float totalMass = 0f;
-
-            switch (TankA.Content)
-            {
-                case StoredType.Oil:
-                    totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.CrudeMassPerLiter;
-                    break;
-                case StoredType.Deepchem:
-                    totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.DeepchemMassPerLiter;
-                    break;
-                case StoredType.Helixien:
-                    totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.HelixienMassPerLiter;
-                    break;
-                case StoredType.Scarlet:
-                    totalMass += TankA.TankStorage * HeavyLiquidShuttleManager.ScarletMassPerLiter;
-                    break;
-                default: // Water or Sewage
-                    totalMass += TankA.TankStorage;
-                    break;
-            }
-
-            switch (TankB.Content)
-            {
-                case StoredType.Water:
-                    totalMass += TankB.TankStorage;
-                    break;
-                case StoredType.Oil:
-                    totalMass += TankB.TankStorage * HeavyLiquidShuttleManager.CrudeMassPerLiter;
-                    break;
-                case StoredType.Deepchem:
-                    totalMass += TankB.TankStorage * HeavyLiquidShuttleManager.DeepchemMassPerLiter;
-                    break;
-                case StoredType.Helixien:
-                    totalMass += TankB.TankStorage * HeavyLiquidShuttleManager.HelixienMassPerLiter;
-                    break;
-            }
-
-            return totalMass;
-        }
-
-        // Gizmos for emptying both tanks, in the case of emptying an oil tank, it calls registered methods 
-        // of OilSpillIntegration in RimefellerIntegration and DubwiseSharedIntegraation when present. When 
-        // emptying Helixien the TankExplosiveness becomes None.
         public override IEnumerable<Gizmo> CompGetGizmosExtra()
         {
             if (cleanedUp)
@@ -196,7 +162,7 @@ namespace HeavyLiquidShuttleMod
                 defaultLabel = "Lock Tank A",
                 defaultDesc = "Tank A: Lock this tank so it cannot intake or output its contents.",
                 icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Lock"),
-                isActive = () => this.TankA.IsLocked,
+                isActive = () => this.TankA.isLocked,
                 toggleAction = () =>
                 {
                     ToggleLock(this.TankA);
@@ -207,16 +173,16 @@ namespace HeavyLiquidShuttleMod
                 defaultLabel = "Lock Tank B",
                 defaultDesc = "Tank B: Lock this tank so it cannot intake or output its contents.",
                 icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Lock"),
-                isActive = () => this.TankB.IsLocked,
+                isActive = () => this.TankB.isLocked,
                 toggleAction = () =>
                 {
                     ToggleLock(this.TankB);
                 }
             };
 
-            if (TankA.TankStorage > 0f)
+            if (TankA.tankStorage > 0f)
             {
-                string drainIcon = TankA.Content == StoredType.Helixien ? "UI/Gizmo/Vent" : "UI/Gizmo/Drain";
+                string drainIcon = TankA.content == CachedDefs.Helixien ? "UI/Gizmo/Vent" : "UI/Gizmo/Drain";
 
                 yield return new Command_Action
                 {
@@ -225,31 +191,31 @@ namespace HeavyLiquidShuttleMod
                     icon = ContentFinder<Texture2D>.Get(drainIcon),
                     action = () =>
                     {
-                        if (TankA.Content == StoredType.Water)
+                        if (TankA.content == CachedDefs.Water)
                         {
-                            TankA.IsContaminated = false;
+                            TankA.isContaminated = false;
                         }
-                        else if (TankA.Content == StoredType.Oil)
+                        else if (TankA.content == CachedDefs.Oil)
                         {
                             IntVec3 spillCell = GetTankCell(true);
-                            OilSpillIntegration?.Invoke(TankA.TankStorage, spillCell);
+                            OilSpillIntegration?.Invoke(TankA.tankStorage, spillCell);
                         }
-                        else if (TankA.Content == StoredType.Sewage)
+                        else if (TankA.content == CachedDefs.Sewage)
                         {
                             IntVec3 spillCell = GetTankCell(true);
-                            SewageSpillIntegration?.Invoke(TankA.TankStorage, spillCell);
+                            SewageSpillIntegration?.Invoke(TankA.tankStorage, spillCell);
                         }
 
-                        TankA.Content = StoredType.Empty;
-                        TankA.TankExplosiveness = TankState.HelixienState.None;
-                        TankA.TankStorage = 0f;
-                        TankA.TransferEnabled = false;
+                        TankA.content = null;
+                        TankA.tankExplosiveness = TankState.HelixienState.None;
+                        TankA.tankStorage = 0f;
+                        TankA.transferEnabled = false;
                     }
                 };
             }
-            if (TankB.TankStorage > 0f)
+            if (TankB.tankStorage > 0f)
             {
-                string drainIcon = TankB.Content == StoredType.Helixien ? "UI/Gizmo/Vent" : "UI/Gizmo/Drain";
+                string drainIcon = TankB.content == CachedDefs.Helixien ? "UI/Gizmo/Vent" : "UI/Gizmo/Drain";
 
                 yield return new Command_Action
                 {
@@ -258,36 +224,36 @@ namespace HeavyLiquidShuttleMod
                     icon = ContentFinder<Texture2D>.Get(drainIcon),
                     action = () =>
                     {
-                        if (TankB.Content == StoredType.Water)
+                        if (TankB.content == CachedDefs.Water)
                         {
-                            TankB.IsContaminated = false;
+                            TankB.isContaminated = false;
                         }
-                        else if (TankB.Content == StoredType.Oil)
+                        else if (TankB.content == CachedDefs.Oil)
                         {
                             IntVec3 spillCell = GetTankCell(false);
-                            OilSpillIntegration?.Invoke(TankB.TankStorage, spillCell);
+                            OilSpillIntegration?.Invoke(TankB.tankStorage, spillCell);
                         }
-                        else if (TankB.Content == StoredType.Sewage)
+                        else if (TankB.content == CachedDefs.Sewage)
                         {
                             IntVec3 spillCell = GetTankCell(false);
-                            SewageSpillIntegration?.Invoke(TankB.TankStorage, spillCell);
+                            SewageSpillIntegration?.Invoke(TankB.tankStorage, spillCell);
                         }
 
-                        TankB.Content = StoredType.Empty;
-                        TankB.TankExplosiveness = TankState.HelixienState.None;
-                        TankB.TankStorage = 0f;
-                        TankB.TransferEnabled = false;
+                        TankB.content = null;
+                        TankB.tankExplosiveness = TankState.HelixienState.None;
+                        TankB.tankStorage = 0f;
+                        TankB.transferEnabled = false;
                     }
                 };
             }
 
-            if (TankA.IsContaminated)
+            if (TankA.isContaminated)
             {
                 yield return new Command_Toggle
                 {
                     defaultLabel = "Clean Tank A",
                     defaultDesc = "Clean Tank A of its contamination.",
-                    Disabled = TankA.Content != StoredType.Empty,
+                    Disabled = TankA.content != null,
                     icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Clean"),
                     isActive = () => CleaningTankA,
                     toggleAction = () =>
@@ -301,13 +267,13 @@ namespace HeavyLiquidShuttleMod
                     }
                 };
             }
-            if (TankB.IsContaminated)
+            if (TankB.isContaminated)
             {
                 yield return new Command_Toggle
                 {
                     defaultLabel = "Clean Tank B",
                     defaultDesc = "Clean Tank B of its contamination.",
-                    Disabled = TankB.Content != StoredType.Empty,
+                    Disabled = TankB.content != null,
                     icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Clean"),
                     isActive = () => CleaningTankB,
                     toggleAction = () =>
@@ -334,22 +300,22 @@ namespace HeavyLiquidShuttleMod
             }
         }
 
-        public static Gizmo? CreateDischargeGizmo(HeavyLiquidShuttle shuttle, string tank, StoredType type)
+        public static Gizmo CreateDischargeGizmo(HeavyLiquidShuttle shuttle, bool handleTankA, StoredTypeDef def)
         {
-            if (tank == "Tank A")
+            if (handleTankA)
             {
                 return new Command_Toggle
                 {
-                    defaultLabel = "Discharge " + type,
-                    defaultDesc = tank + ": Discharge into an adjacent " + type + " network.",
+                    defaultLabel = "Discharge " + def.label,
+                    defaultDesc = "Tank A: Discharge into an adjacent " + def.label + " network.",
                     icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Discharge"),
                     isActive = () =>
                     {
-                        return shuttle.TankA.TransferEnabled;
+                        return shuttle.TankA.transferEnabled;
                     },
                     toggleAction = () =>
                     {
-                        if (shuttle.TankA.TankStorage <= 0f)
+                        if (shuttle.TankA.tankStorage <= 0f)
                             return;
 
                         shuttle.ToggleTransfer(shuttle.TankA);
@@ -357,27 +323,26 @@ namespace HeavyLiquidShuttleMod
                 };
             }
 
-            else if (tank == "Tank B")
+            else
             {
                 return new Command_Toggle
                 {
-                    defaultLabel = "Discharge " + type,
-                    defaultDesc = tank + ": Discharge into an adjacent " + type + " network.",
+                    defaultLabel = "Discharge " + def.label,
+                    defaultDesc = "Tank B: Discharge into an adjacent " + def.label + " network.",
                     icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Discharge"),
                     isActive = () =>
                     {
-                        return shuttle.TankB.TransferEnabled;
+                        return shuttle.TankB.transferEnabled;
                     },
                     toggleAction = () =>
                     {
-                        if (shuttle.TankB.TankStorage <= 0f)
+                        if (shuttle.TankB.tankStorage <= 0f)
                             return;
 
                         shuttle.ToggleTransfer(shuttle.TankB);
                     }
                 };
             }
-            return null;
         }
 
         private void TryStartTankCleaning(bool handlingA)
@@ -502,21 +467,28 @@ namespace HeavyLiquidShuttleMod
             string tankA;
             string tankB;
 
-            if (TankA.Content == StoredType.Water)
-                tankA = $"Tank A: {TankA.Content} ({TankA.WaterQuality}) |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
-            else if (TankA.Content == StoredType.Empty && TankA.IsContaminated)
-                tankA = $"Tank A: Empty (Contaminated) |  Capacity: 0 / {TankA.TankCapacity} Liters\n";
-            else
-                tankA = $"Tank A: {TankA.Content} |  Capacity: {TankA.TankStorage:F0} / {TankA.TankCapacity} Liters\n";
+            string contaminatedA = TankA.isContaminated ? " (Contaminated)" : "";
+            string contaminatedB = TankB.isContaminated ? " (Contaminated)" : "";
 
-            if (TankB.Content == StoredType.Water)
-                tankB = $"Tank B: {TankB.Content} ({TankB.WaterQuality}) |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
-            else if (TankB.Content == StoredType.Empty && TankB.IsContaminated)
-                tankB = $"Tank B: Empty (Contaminated) |  Capacity: 0 / {TankB.TankCapacity} Liters";
-            else
-                tankB = $"Tank B: {TankB.Content} |  Capacity: {TankB.TankStorage:F0} / {TankB.TankCapacity} Liters";
+            if (TankA.content == null)
+                tankA = $"Tank A: Empty{contaminatedA} |  Capacity: 0 / {TankA.props.physicalCapacity} Liters\n";
 
-            if (TankA.Content == StoredType.Helixien || TankB.Content == StoredType.Helixien)
+            else if (TankA.content == CachedDefs.Water)
+                tankA = $"Tank A: {TankA.content} ({TankA.waterQuality}) |  Capacity: {TankA.tankStorage:F0} / {TankA.props.physicalCapacity} Liters\n";
+            
+            else
+                tankA = $"Tank A: {TankA.content} |  Capacity: {TankA.tankStorage:F0} / {TankA.props.physicalCapacity} Liters\n";
+
+            if (TankB.content == null)
+                tankB = $"Tank B: Empty{contaminatedB} |  Capacity: 0 / {TankB.props.physicalCapacity} Liters";
+
+            else if (TankB.content == CachedDefs.Water)
+                tankB = $"Tank B: {TankB.content} ({TankB.waterQuality}) |  Capacity: {TankB.tankStorage:F0} / {TankB.props.physicalCapacity} Liters";
+            
+            else
+                tankB = $"Tank B: {TankB.content} |  Capacity: {TankB.tankStorage:F0} / {TankB.props.physicalCapacity} Liters";
+
+            if (TankA.content == CachedDefs.Helixien || TankB.content == CachedDefs.Helixien)
             {
                 int totalExplosiveness = TankA.GetExplosiveness() + TankB.GetExplosiveness();
                 string explosiveness;
@@ -557,23 +529,29 @@ namespace HeavyLiquidShuttleMod
 
         public override void PostExposeData()
         {
-            Scribe_Values.Look(ref TankA.TankStorage, "tankAStorage", 0f);
-            Scribe_Values.Look(ref TankB.TankStorage, "tankBStorage", 0f);
+            Scribe_Values.Look(ref TankA.tankStorage, "tankAStorage", 0f);
+            Scribe_Values.Look(ref TankB.tankStorage, "tankBStorage", 0f);
 
-            Scribe_Values.Look(ref TankA.Content, "tankAContent", StoredType.Empty);
-            Scribe_Values.Look(ref TankB.Content, "tankBContent", StoredType.Empty);
+            Scribe_Values.Look(ref TankA.content, "tankAContent", null);
+            Scribe_Values.Look(ref TankB.content, "tankBContent", null);
 
-            Scribe_Values.Look(ref TankA.IsLocked, "tankALocked", false);
-            Scribe_Values.Look(ref TankB.IsLocked, "tankBLocked", false);
+            Scribe_Values.Look(ref TankA.isLocked, "tankALocked", false);
+            Scribe_Values.Look(ref TankB.isLocked, "tankBLocked", false);
 
-            Scribe_Values.Look(ref TankA.IsContaminated, "tankAContaminated", false);
-            Scribe_Values.Look(ref TankB.IsContaminated, "tankBContaminated", false);
+            Scribe_Values.Look(ref TankA.isContaminated, "tankAContaminated", false);
+            Scribe_Values.Look(ref TankB.isContaminated, "tankBContaminated", false);
 
-            Scribe_Values.Look(ref TankA.WaterQuality, "tankAWaterQuality", TankState.WaterState.Untreated);
-            Scribe_Values.Look(ref TankB.WaterQuality, "tankBWaterQuality", TankState.WaterState.Untreated);
+            Scribe_Values.Look(ref TankA.props.physicalCapacity, "tankACapacity", 1250f);
+            Scribe_Values.Look(ref TankB.props.physicalCapacity, "tankBCapacity", 1250f);
 
-            Scribe_Values.Look(ref TankA.TankExplosiveness, "tankAExplosiveness", TankState.HelixienState.None);
-            Scribe_Values.Look(ref TankB.TankExplosiveness, "tankBExplosiveness", TankState.HelixienState.None);
+            Scribe_Values.Look(ref TankA.props.pressureRating, "tankAPressureRating", 150f);
+            Scribe_Values.Look(ref TankB.props.pressureRating, "tankBPressurRating", 150f);
+
+            Scribe_Values.Look(ref TankA.waterQuality, "tankAWaterQuality", TankState.WaterState.Untreated);
+            Scribe_Values.Look(ref TankB.waterQuality, "tankBWaterQuality", TankState.WaterState.Untreated);
+
+            Scribe_Values.Look(ref TankA.tankExplosiveness, "tankAExplosiveness", TankState.HelixienState.None);
+            Scribe_Values.Look(ref TankB.tankExplosiveness, "tankBExplosiveness", TankState.HelixienState.None);
         }
     }
 }

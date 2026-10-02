@@ -9,13 +9,13 @@ namespace HeavyLiquidShuttleMod
         public static HashSet<PipelineNet> CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle)
         {
             return ShuttleSearch<PipelineNet>.CheckCellsAroundShuttle(
-                shuttle, 
-                (thing, cell) =>
-            {
+                shuttle,
+                thing =>
+                {
                 CompPipe? pipe = thing.TryGetComp<CompPipe>();
 
                 return pipe?.pipeNet;
-            });
+                });
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using Verse;
+using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -39,7 +40,7 @@ namespace HeavyLiquidShuttleMod
 
         protected virtual void OnCleanup() { }
 
-        protected virtual StoredType LiquidTypeX { get; }
+        protected virtual StoredTypeDef? LiquidTypeX { get; }
         protected HashSet<TNetwork1> AdjacentXNets = new HashSet<TNetwork1>();
         protected List<TStorage1> SupplyStorageCandidatesX = new List<TStorage1>();
         protected List<TStorage1> ReceiveStorageCandidatesX = new List<TStorage1>();
@@ -60,10 +61,10 @@ namespace HeavyLiquidShuttleMod
             if (cleanedUp)
                 return;
 
-            Shuttle.TankA.ReceiveAllowance = 1f;
-            Shuttle.TankA.SupplyAllowance = 1f;
-            Shuttle.TankB.ReceiveAllowance = 1f;
-            Shuttle.TankB.SupplyAllowance = 1f;
+            Shuttle.TankA.receiveAllowance = 1f;
+            Shuttle.TankA.supplyAllowance = 1f;
+            Shuttle.TankB.receiveAllowance = 1f;
+            Shuttle.TankB.supplyAllowance = 1f;
 
             FindAdjacentNetworks();
 
@@ -94,16 +95,16 @@ namespace HeavyLiquidShuttleMod
                 out TStorage1? validSupplyStorage,
                 out TStorage1? validReceiveStorage);
 
-            TankState? tankSupply = Shuttle.GetTankForSupply(LiquidTypeX);
-            TankState? tankReceive = Shuttle.GetTankForReceive(LiquidTypeX);
+            TankState? tankSupply = Shuttle.GetTankForSupply(LiquidTypeX!);
+            TankState? tankReceive = Shuttle.GetTankForReceive(LiquidTypeX!);
 
 
             // TryPush pushes from Tank Supply to Network Receive
-            if (tankSupply != null && validReceiveStorage != null && tankSupply.SupplyAllowance > 0f)
+            if (tankSupply != null && validReceiveStorage != null && tankSupply.supplyAllowance > 0f)
                 TryPushX(validReceiveStorage, tankSupply);
 
             // TryPull pulls from Network Supply to Tank Receive
-            if (tankReceive != null && validSupplyStorage != null && tankReceive.ReceiveAllowance > 0f)
+            if (tankReceive != null && validSupplyStorage != null && tankReceive.receiveAllowance > 0f)
                 TryPullX(validSupplyStorage, tankReceive);
 
         }
@@ -184,49 +185,60 @@ namespace HeavyLiquidShuttleMod
 
         protected void TryPushX(TStorage1 storage, TankState tank)
         {
-            if (tank.TankStorage <= 0f)
+            if (tank.tankStorage <= 0f)
                 return;
 
-            if (!tank.TransferEnabled)
+            if (!tank.transferEnabled)
                 return;
 
-            float amount = Mathf.Min(tank.TankStorage, tank.SupplyAllowance, 1f);
+            float amount = Mathf.Min(tank.tankStorage, tank.supplyAllowance, 1f);
 
             if (amount <= 0f)
                 return;
 
-            float transferred = ModifyStorageX(storage, tank, amount, true);
+            // Amount to ask network to receive
+            float unitsRequested = TankState.LitersToUnits(amount, LiquidTypeX!);
 
-            tank.TankStorage -= transferred;
+            float unitsTransferred = ModifyStorageX(storage, tank, unitsRequested, true);
 
-            tank.SupplyAllowance -= transferred;
+            // Calculate back what the net received
+            float litersTransferred = TankState.UnitsToLiters(unitsTransferred, LiquidTypeX!);
+
+            tank.tankStorage -= litersTransferred;
+            tank.supplyAllowance -= litersTransferred;
             MassPatch.NotifyLiquidMassChanged(Shuttle);
 
-            if (tank.TankStorage <= 0f)
+            if (tank.tankStorage <= 0f)
             {
-                tank.TankStorage = 0f;
-                tank.Content = StoredType.Empty;
-                tank.TransferEnabled = false;
+                tank.tankStorage = 0f;
+                tank.content = null;
+                tank.transferEnabled = false;
             }
         }
 
         protected void TryPullX(TStorage1 storage, TankState tank)
         {
-            if (tank.TankStorage >= tank.TankCapacity)
+            if (tank.tankStorage >= tank.props.physicalCapacity)
                 return;
 
-            float amount = Mathf.Min(tank.TankCapacity - tank.TankStorage, tank.ReceiveAllowance, 1f);
+            float amount = Mathf.Min(tank.props.physicalCapacity - tank.tankStorage, tank.receiveAllowance, 1f);
 
             if (amount <= 0f)
                 return;
 
-            float transferred = ModifyStorageX(storage, tank, amount, false);
+            // Amount to ask network to receive
+            float unitsRequested = TankState.LitersToUnits(amount, LiquidTypeX!);
 
-            if (transferred > 0f)
-                tank.Content = LiquidTypeX;
+            float unitsTransferred = ModifyStorageX(storage, tank, unitsRequested, false);
 
-            tank.TankStorage += transferred;
-            tank.ReceiveAllowance -= transferred;
+            if (unitsTransferred > 0f)
+                tank.content = LiquidTypeX;
+
+            // Calculate back what the net gave us
+            float litersTransferred = TankState.UnitsToLiters(unitsTransferred, LiquidTypeX!);
+
+            tank.tankStorage += litersTransferred;
+            tank.receiveAllowance -= litersTransferred;
             MassPatch.NotifyLiquidMassChanged(Shuttle);
         }
 
@@ -235,11 +247,11 @@ namespace HeavyLiquidShuttleMod
             if (AdjacentXNets.Count <= 0)
                 yield break;
 
-            if (Shuttle.TankA.Content == LiquidTypeX && Shuttle.TankA.TankStorage > 0f)
-                yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, "Tank A", LiquidTypeX)!;
+            if (Shuttle.TankA.content == LiquidTypeX && Shuttle.TankA.tankStorage > 0f)
+                yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, true, LiquidTypeX!);
 
-            if (Shuttle.TankB.Content == LiquidTypeX && Shuttle.TankB.TankStorage > 0f)
-                yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, "Tank B", LiquidTypeX)!;
+            if (Shuttle.TankB.content == LiquidTypeX && Shuttle.TankB.tankStorage > 0f)
+                yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, false, LiquidTypeX!);
         }
     }
 }

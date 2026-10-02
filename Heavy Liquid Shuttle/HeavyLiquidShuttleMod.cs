@@ -14,6 +14,7 @@ namespace HeavyLiquidShuttleMod
         public static bool VEChemfuelActive { get; private set; }
         public static bool VEHelixienActive { get; private set; }
         public static bool VEScarletActive { get; private set; }
+        public static bool VEGravshipActive { get; private set; }
 
         public HeavyLiquidShuttleMod(ModContentPack content) : base(content)
         {
@@ -25,12 +26,18 @@ namespace HeavyLiquidShuttleMod
             VEChemfuelActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.VChemfuelE");
             VEHelixienActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.HelixienGas");
             VEScarletActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Ushanka.LuciferiumExpansion");
+            VEGravshipActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "vanillaexpanded.gravship");
 
             if (DubsBadHygieneActive)
                 LibraryLoaders.DBHLoad();
+
             if (RimefellerActive)
                 LibraryLoaders.RFLoad();
-            if (VEChemfuelActive || VEHelixienActive || VEScarletActive)
+
+            if (VEChemfuelActive || 
+                VEHelixienActive || 
+                VEScarletActive || 
+                VEGravshipActive)
                 LibraryLoaders.VELoad();
 
             Application.focusChanged += HeavyLiquidShuttleManager.OnApplicationFocusChanged;
@@ -45,7 +52,6 @@ namespace HeavyLiquidShuttleMod
     {
         public static Type? DBHIntegrationType { get; private set; }
         public static Type? RimefellerIntegrationType { get; private set; }
-        public static Type? DubwiseSharedIntegrationType { get; private set; }
         public static Type? VESharedIntegrationType { get; private set; }
 
         public static void DBHLoad()

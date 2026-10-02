@@ -1,6 +1,7 @@
 ﻿using Rimefeller;
 using UnityEngine;
 using Verse;
+using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -8,7 +9,7 @@ namespace HeavyLiquidShuttleMod
     {
         public RimefellerIntegration(HeavyLiquidShuttle shuttle) : base(shuttle) => Shuttle.OilSpillIntegration += StartOilSpill;
         protected override void OnCleanup() => Shuttle.OilSpillIntegration -= StartOilSpill;
-        protected override StoredType LiquidTypeX => StoredType.Oil;
+        protected override StoredTypeDef LiquidTypeX => CachedDefs.Oil;
         protected override void FindAdjacentNetworks() => AdjacentXNets = ShuttleOilSearch.CheckCellsAroundShuttle(Shuttle);
 
         protected override void FindValidStoragesX(
@@ -53,8 +54,8 @@ namespace HeavyLiquidShuttleMod
             transferred = Mathf.Min(amount, (float)storage.Storage);
             storage.Storage -= transferred;
 
-            if (transferred > 0f && !tank.IsContaminated)
-                tank.IsContaminated = true;
+            if (transferred > 0f && !tank.isContaminated)
+                tank.isContaminated = true;
 
             return transferred;
         }

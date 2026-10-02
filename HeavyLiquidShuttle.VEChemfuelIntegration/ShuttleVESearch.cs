@@ -1,56 +1,85 @@
 ﻿using PipeSystem;
-using Verse;
 using System.Collections.Generic;
+using System.Resources;
+using Verse;
+using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {
-    public class ShuttleVESearch
+    public static class ShuttleVESearch
     {
-        public static void CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle, out HashSet<PipeNet> xNets, out HashSet<PipeNet> yNets, out HashSet<PipeNet> zNets)
+        public static Dictionary<StoredTypeDef, HashSet<PipeNet>> CheckCellsAroundShuttle(
+            HeavyLiquidShuttle shuttle)
         {
-            ShuttleSearchTripleOut<PipeNet>.CheckCellsAroundShuttle(
-                shuttle,
-                out xNets,
-                out yNets,
-                out zNets,
-                (thing, _) =>
+            Dictionary<StoredTypeDef, HashSet<PipeNet>> nets =
+                new Dictionary<StoredTypeDef, HashSet<PipeNet>>();
+
+            if (shuttle == null)
+                return nets;
+
+            Map map = shuttle.parent.Map;
+
+            if (map == null)
+                return nets;
+
+            HashSet<IntVec3> adjacentTilesSet = new HashSet<IntVec3>();
+
+            foreach (IntVec3 shuttleCell in shuttle.parent.OccupiedRect())
+            {
+                foreach (IntVec3 adjacentCell in GenAdjFast.AdjacentCells8Way(shuttleCell))
+                    adjacentTilesSet.Add(adjacentCell);
+            }
+
+            foreach (IntVec3 shuttleCell in shuttle.parent.OccupiedRect())
+                adjacentTilesSet.Remove(shuttleCell);
+
+            foreach (IntVec3 adjacentTile in adjacentTilesSet)
+            {
+                if (!adjacentTile.InBounds(map))
+                    continue;
+
+                foreach (Thing thing in map.thingGrid.ThingsAt(adjacentTile))
                 {
                     CompResource? pipe = thing.TryGetComp<CompResource>();
 
                     if (pipe?.PipeNet == null)
-                        return null;
+                        continue;
 
-                    if (pipe.Resource.name != "Deepchem")
-                        return null;
+                    StoredTypeDef? def = GetStoredTypeDef(pipe.PipeNet.def.defName);
 
-                    return pipe?.PipeNet;
-                },
-                (thing, _) =>
-                {
-                    CompResource? pipe = thing.TryGetComp<CompResource>();
+                    if (def == null)
+                        continue;
 
-                    if (pipe?.PipeNet == null)
-                        return null;
+                    if (!nets.TryGetValue(def, out HashSet<PipeNet>? resourceNets))
+                    {
+                        resourceNets = new HashSet<PipeNet>();
+                        nets.Add(def, resourceNets);
+                    }
 
-                    if (pipe.Resource.name != "Helixien gas")
-                        return null;
+                    resourceNets.Add(pipe.PipeNet);
+                }
+            }
 
-                    return pipe?.PipeNet;
-                },
-                (thing, _) =>
-                {
-                    CompResource? pipe = thing.TryGetComp<CompResource>();
+            return nets;
+        }
 
-                    if (pipe?.PipeNet == null)
-                        return null;
-
-                    if (pipe.Resource.name != "Scarlet sludge")
-                        return null;
-
-                    return pipe?.PipeNet;
-                });
-
-
+        private static StoredTypeDef? GetStoredTypeDef(string defName)
+        {
+            switch (defName)
+            {
+                case "Deepchem":
+                    return CachedDefs.Deepchem;
+                case "Helixien gas":
+                    return CachedDefs.Helixien;
+                case "Scarlet sludge":
+                    return CachedDefs.Scarlet;
+                case "Oxygen":
+                    return CachedDefs.Oxygen;
+                case "Astrofuel":
+                    return CachedDefs.Astrofuel;
+                default:
+                    return null;
+            }
         }
     }
 }

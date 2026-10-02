@@ -1,46 +1,53 @@
 ﻿using PipeSystem;
-using System;
 using RimWorld;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using Verse;
+using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {
     class VEResource
     {
-        public StoredType Type;
+        public StoredTypeDef? def;
 
-        public HashSet<PipeNet> AdjacentNets = new HashSet<PipeNet>();
-        public List<CompResourceStorage> SupplyCandidates = new List<CompResourceStorage>();
-        public List<CompResourceStorage> ReceiveCandidates = new List<CompResourceStorage>();
+        public HashSet<PipeNet> adjacentNets = new HashSet<PipeNet>();
+        public List<CompResourceStorage> supplyCandidates = new List<CompResourceStorage>();
+        public List<CompResourceStorage> receiveCandidates = new List<CompResourceStorage>();
 
-        public CompResourceStorage? LastSupplied;
-        public CompResourceStorage? LastReceived;
+        public CompResourceStorage? lastSupplied;
+        public CompResourceStorage? lastReceived;
     }
 
     public class VanillaExpandedIntegration
     {
-        private readonly HeavyLiquidShuttle Shuttle;
-        private readonly List<VEResource> Resources = new List<VEResource>();
+        private readonly HeavyLiquidShuttle shuttle;
+        private readonly List<VEResource> resources = new List<VEResource>();
 
         public VanillaExpandedIntegration(HeavyLiquidShuttle shuttle)
         {
-            Shuttle = shuttle;
+            this.shuttle = shuttle;
 
             HeavyLiquidShuttleGameComp.TickIntegration += OnShuttleTick;
             HeavyLiquidShuttleGameComp.TickIntegration += OnTransferTick;
-            Shuttle.GizmoIntegration += AddGizmos;
+            this.shuttle.GizmoIntegration += AddGizmos;
 
             if (HeavyLiquidShuttleMod.VEChemfuelActive)
-                Resources.Add(new VEResource { Type = StoredType.Deepchem });
+                resources.Add(new VEResource { def = DefDatabase<StoredTypeDef>.GetNamed("Deepchem") });
 
             if (HeavyLiquidShuttleMod.VEHelixienActive)
-                Resources.Add(new VEResource { Type = StoredType.Helixien });
+                resources.Add(new VEResource { def = DefDatabase<StoredTypeDef>.GetNamed("Helixien") });
 
             if (HeavyLiquidShuttleMod.VEScarletActive)
-                Resources.Add(new VEResource { Type = StoredType.Scarlet });
+                resources.Add(new VEResource { def = DefDatabase<StoredTypeDef>.GetNamed("Scarlet") });
+
+            if (HeavyLiquidShuttleMod.VEGravshipActive)
+            {
+                resources.Add(new VEResource { def = DefDatabase<StoredTypeDef>.GetNamed("Oxygen") });
+                resources.Add(new VEResource { def = DefDatabase<StoredTypeDef>.GetNamed("Astrofuel") });
+            }
         }
 
         private bool cleanedUp = false;
@@ -51,133 +58,115 @@ namespace HeavyLiquidShuttleMod
 
             HeavyLiquidShuttleGameComp.TickIntegration -= OnShuttleTick;
             HeavyLiquidShuttleGameComp.TickIntegration -= OnTransferTick;
-            Shuttle.GizmoIntegration -= AddGizmos;
+            shuttle.GizmoIntegration -= AddGizmos;
 
             cleanedUp = true;
         }
 
-        private static readonly FieldInfo MarkedForTransferField = typeof(PipeNet).GetField("markedForTransfer", BindingFlags.Instance | BindingFlags.NonPublic);
-        private static readonly FieldInfo AmountStoredField = typeof(CompResourceStorage).GetField("amountStored", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo markedForTransferField = typeof(PipeNet).GetField("markedForTransfer", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo amountStoredField = typeof(CompResourceStorage).GetField("amountStored", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private List<CompResourceStorage> GetMarkedForTransfer(PipeNet net)
         {
-            return (List<CompResourceStorage>)MarkedForTransferField.GetValue(net);
+            return (List<CompResourceStorage>)markedForTransferField.GetValue(net);
         }
         private void SetAmountStored(CompResourceStorage storage, float value)
         {
-            AmountStoredField.SetValue(storage, value);
+            amountStoredField.SetValue(storage, value);
         }
 
         private void OnShuttleTick()
         {
-            if (Shuttle.parent.Destroyed)
+            if (shuttle.parent.Destroyed)
                 Cleanup();
 
             if (cleanedUp)
                 return;
 
-            Shuttle.TankA.ReceiveAllowance = 1f;
-            Shuttle.TankA.SupplyAllowance = 1f;
-            Shuttle.TankB.ReceiveAllowance = 1f;
-            Shuttle.TankB.SupplyAllowance = 1f;
+            shuttle.TankA.receiveAllowance = 1f;
+            shuttle.TankA.supplyAllowance = 1f;
+            shuttle.TankB.receiveAllowance = 1f;
+            shuttle.TankB.supplyAllowance = 1f;
 
-            ShuttleVESearch.CheckCellsAroundShuttle(
-                Shuttle, 
-                out HashSet<PipeNet>? aNets, 
-                out HashSet<PipeNet>? bNets,
-                out HashSet<PipeNet>? cNets);
+            Dictionary<StoredTypeDef, HashSet<PipeNet>> nets =
+                ShuttleVESearch.CheckCellsAroundShuttle(shuttle);
 
-            foreach (VEResource resource in Resources)
+            foreach (VEResource resource in resources)
             {
-                resource.AdjacentNets.Clear();
+                resource.adjacentNets.Clear();
 
-                switch (resource.Type)
+                if (nets.TryGetValue(resource.def!, out HashSet<PipeNet>? adjacentNets))
+                    resource.adjacentNets.UnionWith(adjacentNets);
+
+                if (resource.adjacentNets.Count <= 0)
                 {
-                    case StoredType.Deepchem:
-                        if (aNets != null)
-                            resource.AdjacentNets.UnionWith(aNets);
-                        break;
+                    resource.supplyCandidates.Clear();
+                    resource.receiveCandidates.Clear();
 
-                    case StoredType.Helixien:
-                        if (bNets != null)
-                            resource.AdjacentNets.UnionWith(bNets);
-                        break;
-
-                    case StoredType.Scarlet:
-                        if (cNets != null)
-                            resource.AdjacentNets.UnionWith(cNets);
-                        break;
-                }
-
-                if (resource.AdjacentNets.Count <= 0)
-                {
-                    resource.SupplyCandidates.Clear();
-                    resource.ReceiveCandidates.Clear();
-
-                    resource.LastSupplied = null;
-                    resource.LastReceived = null;
+                    resource.lastSupplied = null;
+                    resource.lastReceived = null;
                 }
             }
         }
 
         private void OnTransferTick()
         {
-            if (Shuttle.parent.Destroyed)
+            if (shuttle.parent.Destroyed)
                 Cleanup();
 
             if (cleanedUp)
                 return;
 
-            if (Resources.Count <= 0)
+            if (resources.Count <= 0)
                 return;
 
             int i = 0;
 
-            foreach (VEResource resource in Resources)
+            foreach (VEResource resource in resources)
             {
                 FindValidStorages(
                 resource,
                 out CompResourceStorage? validSupplyStorage,
                 out CompResourceStorage? validReceiveStorage);
 
-                TankState? tankSupply = Shuttle.GetTankForSupply(resource.Type);
-                TankState? tankReceive = Shuttle.GetTankForReceive(resource.Type);
+                TankState? tankSupply = shuttle.GetTankForSupply(resource.def!);
+                TankState? tankReceive = shuttle.GetTankForReceive(resource.def!);
 
-                if (tankSupply != null && validReceiveStorage != null && tankSupply.SupplyAllowance > 0f)
+                if (tankSupply != null && validReceiveStorage != null && tankSupply.supplyAllowance > 0f)
                     TryModify(resource, validReceiveStorage, tankSupply, true);
 
-                if (tankReceive != null && validSupplyStorage != null && tankReceive.ReceiveAllowance > 0f)
+                if (tankReceive != null && validSupplyStorage != null && tankReceive.receiveAllowance > 0f)
                     TryModify(resource, validSupplyStorage, tankReceive, false);
 
                 i++;
             }
         }
 
-        private  void FindValidStorages(
+        private void FindValidStorages(
             VEResource resource,
             out CompResourceStorage? validSupplyStorage,
             out CompResourceStorage? validReceivingStorage)
         {
 
-            resource.SupplyCandidates.Clear();
-            resource.ReceiveCandidates.Clear();
+            resource.supplyCandidates.Clear();
+            resource.receiveCandidates.Clear();
 
-            foreach (PipeNet net in resource.AdjacentNets)
+            foreach (PipeNet net in resource.adjacentNets)
             {
                 List<CompResourceStorage> sourceStorages = GetMarkedForTransfer(net);
 
-                // Storages here are not marked for transfer and are valid receivers of the Shuttle
+                // Storages here are not marked for transfer and are valid receivers of the shuttle
                 foreach (CompResourceStorage storage in net.storages)
                 {
                     if (storage.AmountCanAccept > 0f && !storage.markedForTransfer)
-                        resource.ReceiveCandidates.Add(storage);
+                        resource.receiveCandidates.Add(storage);
                 }
 
-                // Storages here are marked for transfer and are valid suppliers to the Shuttle
+                // Storages here are marked for transfer and are valid suppliers to the shuttle
                 foreach (CompResourceStorage storage in sourceStorages)
                 {
                     if (storage.AmountStored > 0f)
-                        resource.SupplyCandidates.Add(storage);
+                        resource.supplyCandidates.Add(storage);
                 }
             }
 
@@ -200,119 +189,133 @@ namespace HeavyLiquidShuttleMod
             int nextIndex;
 
             // If valid supply storages exist
-            if (resource.SupplyCandidates.Count > 0)
+            if (resource.supplyCandidates.Count > 0)
             {
                 // If this list hasn't been set yet then get the first element
-                if (resource.LastSupplied == null)
+                if (resource.lastSupplied == null)
                 {
-                    resource.LastSupplied = resource.SupplyCandidates[0];
+                    resource.lastSupplied = resource.supplyCandidates[0];
                 }
                 else
                 {
-                    lastIndex = resource.SupplyCandidates.IndexOf(resource.LastSupplied!);
+                    lastIndex = resource.supplyCandidates.IndexOf(resource.lastSupplied!);
 
-                    // If IndexOf is -1 then LastSupplied isn't in the current list
+                    // If IndexOf is -1 then lastSupplied isn't in the current list
                     if (lastIndex < 0)
                     {
-                        resource.LastSupplied = resource.SupplyCandidates[0];
+                        resource.lastSupplied = resource.supplyCandidates[0];
                     }
                     else
                     {
                         nextIndex = lastIndex + 1;
 
                         // If next index exceeds length of list reset to 0
-                        if (nextIndex >= resource.SupplyCandidates.Count)
+                        if (nextIndex >= resource.supplyCandidates.Count)
                             nextIndex = 0;
 
-                        resource.LastSupplied = resource.SupplyCandidates[nextIndex];
+                        resource.lastSupplied = resource.supplyCandidates[nextIndex];
                     }
                 }
-                validSupplyStorage = resource.LastSupplied;
+                validSupplyStorage = resource.lastSupplied;
             }
 
             // If valid receive storages exist
-            if (resource.ReceiveCandidates.Count > 0)
+            if (resource.receiveCandidates.Count > 0)
             {
                 // If this list hasn't been set yet then get the first element
-                if (resource.LastReceived == null)
+                if (resource.lastReceived == null)
                 {
-                    resource.LastReceived = resource.ReceiveCandidates[0];
+                    resource.lastReceived = resource.receiveCandidates[0];
                 }
                 else
                 {
-                    lastIndex = resource.ReceiveCandidates.IndexOf(resource.LastReceived!);
+                    lastIndex = resource.receiveCandidates.IndexOf(resource.lastReceived!);
 
-                    // If IndexOf is -1 then LastReceived isn't in the current list
+                    // If IndexOf is -1 then lastReceived isn't in the current list
                     if (lastIndex < 0)
                     {
-                        resource.LastReceived = resource.ReceiveCandidates[0];
+                        resource.lastReceived = resource.receiveCandidates[0];
                     }
                     else
                     {
                         nextIndex = lastIndex + 1;
 
                         // If next index exceeds length of list reset to 0
-                        if (nextIndex >= resource.ReceiveCandidates.Count)
+                        if (nextIndex >= resource.receiveCandidates.Count)
                             nextIndex = 0;
 
-                        resource.LastReceived = resource.ReceiveCandidates[nextIndex];
+                        resource.lastReceived = resource.receiveCandidates[nextIndex];
                     }
                 }
-                validReceiveStorage = resource.LastReceived;
+                validReceiveStorage = resource.lastReceived;
             }
         }
 
         private void TryModify(VEResource resource, CompResourceStorage storage, TankState tank, bool addTo)
         {
             float amount; 
-            float transferred;
+            float unitsTransferred;
 
             // Adding to storage is subtracting from shuttle tanks
             if (addTo)
             {
-                if (tank.TankStorage <= 0f)
+                if (tank.tankStorage <= 0f)
                     return;
 
-                if (!tank.TransferEnabled)
+                if (!tank.transferEnabled)
                     return;
 
-                amount = Mathf.Min(tank.TankStorage, tank.SupplyAllowance, 1f);
+                amount = Mathf.Min(tank.tankStorage, tank.supplyAllowance, 1f);
 
                 if (amount <= 0f)
                     return;
 
-                transferred = ModifyStorage(resource,storage, tank, amount, true);
-                tank.TankStorage -= transferred;
-                tank.SupplyAllowance -= transferred;
+                // Amount to ask network to receive
+                float unitsRequested = TankState.LitersToUnits(amount, resource.def!);
 
-                if (tank.TankStorage <= 0f)
+                unitsTransferred = ModifyStorage(resource,storage, tank, unitsRequested, true);
+
+                // Calculate back what the net received
+                float litersTransferred = TankState.UnitsToLiters(unitsTransferred, resource.def!);
+
+                tank.tankStorage -= litersTransferred;
+                tank.supplyAllowance -= litersTransferred;
+
+                if (tank.tankStorage <= 0f)
                 {
-                    tank.TankStorage = 0f;
-                    tank.Content = StoredType.Empty;
-                    tank.TransferEnabled = false;
+                    tank.tankStorage = 0f;
+                    tank.content = null;
+                    tank.transferEnabled = false;
                 }
             }
             // Pulling from storage is adding to shuttle tanks
             else
             {
-                if (tank.TankStorage >= tank.TankCapacity)
+                if (tank.tankStorage >= tank.props.physicalCapacity)
                     return;
 
-                amount = Mathf.Min(tank.TankCapacity - tank.TankStorage, tank.ReceiveAllowance, 1f);
+                amount = Mathf.Min(tank.props.physicalCapacity - tank.tankStorage, tank.receiveAllowance, 1f);
 
                 if (amount <= 0f)
                     return;
 
-                transferred = ModifyStorage(resource,storage, tank, amount, false);
-                tank.TankStorage += transferred;
-                tank.ReceiveAllowance -= transferred;
+                // Amount to ask network to receive
+                float unitsRequested = TankState.LitersToUnits(amount, resource.def!);
 
-                if (transferred > 0f)
-                    tank.Content = resource.Type;
+                unitsTransferred = ModifyStorage(resource,storage, tank, unitsRequested, false);
+
+                if (unitsTransferred > 0f)
+                    tank.content = resource.def;
+
+                // Calculate back what the net received
+                float litersTransferred = TankState.UnitsToLiters(unitsTransferred, resource.def!);
+
+                tank.tankStorage += litersTransferred;
+                tank.receiveAllowance -= litersTransferred;
             }
             
             HandleHelixienTank(tank);
-            MassPatch.NotifyLiquidMassChanged(Shuttle);
+            MassPatch.NotifyLiquidMassChanged(shuttle);
         }
 
         private float ModifyStorage(VEResource resource, CompResourceStorage storage, TankState tank, float amount, bool addTo)
@@ -330,20 +333,23 @@ namespace HeavyLiquidShuttleMod
             transferred = Mathf.Min(amount, storage.AmountStored);
             SetAmountStored(storage, storage.AmountStored - transferred);
 
-            if (transferred > 0f && !tank.IsContaminated && resource.Type == StoredType.Deepchem)
-                tank.IsContaminated = true;
+            if (transferred > 0f && 
+                !tank.isContaminated && 
+                resource.def == CachedDefs.Deepchem || 
+                resource.def == CachedDefs.Astrofuel)
+                tank.isContaminated = true;
 
             return transferred;
         }
 
         private void HandleHelixienTank(TankState tank)
         {
-            tank.TankExplosiveness = tank.GetHelixienState(out bool stateChanged);
+            tank.tankExplosiveness = tank.GetHelixienState(out bool stateChanged);
 
             if (!stateChanged)
                 return;
 
-            ShuttleExplosion explosion = Shuttle.parent.TryGetComp<ShuttleExplosion>();
+            ShuttleExplosion explosion = shuttle.parent.TryGetComp<ShuttleExplosion>();
 
             if (explosion != null)
                 explosion.UpdateExplosiveness();
@@ -351,15 +357,15 @@ namespace HeavyLiquidShuttleMod
 
         private IEnumerable<Gizmo> AddGizmos()
         {
-            foreach (VEResource resource in Resources)
+            foreach (VEResource resource in resources)
             {
-                if (resource.AdjacentNets.Count > 0)
+                if (resource.adjacentNets.Count > 0)
                 {
-                    if (Shuttle.TankA.Content == resource.Type && Shuttle.TankA.TankStorage > 0f)
-                        yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, "Tank A", resource.Type)!;
+                    if (shuttle.TankA.content == resource.def && shuttle.TankA.tankStorage > 0f)
+                        yield return HeavyLiquidShuttle.CreateDischargeGizmo(shuttle, true, resource.def!);
 
-                    if (Shuttle.TankB.Content == resource.Type && Shuttle.TankB.TankStorage > 0f)
-                        yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, "Tank B", resource.Type)!;
+                    if (shuttle.TankB.content == resource.def && shuttle.TankB.tankStorage > 0f)
+                        yield return HeavyLiquidShuttle.CreateDischargeGizmo(shuttle, false, resource.def!);
                 }
             }
         }

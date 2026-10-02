@@ -7,10 +7,10 @@ namespace HeavyLiquidShuttleMod
     public class CompProperties_ShuttleExplosive : CompProperties
     {
         // Explosion
-        public DamageDef explosiveDamageType;
+        public DamageDef? explosiveDamageType;
         public int damageAmountBase = -1;
         public float armorPenetrationBase = -1f;
-        public SoundDef explosionSound;
+        public SoundDef? explosionSound;
 
         public bool doVisualEffects = true;
         public bool doSoundEffects = true;
@@ -21,11 +21,11 @@ namespace HeavyLiquidShuttleMod
         public IntRange wickTicks = new IntRange(140, 150);
 
         // Pre/post explosion
-        public ThingDef preExplosionSpawnThingDef;
+        public ThingDef? preExplosionSpawnThingDef;
         public float preExplosionSpawnChance;
         public int preExplosionSpawnThingCount = 1;
 
-        public ThingDef postExplosionSpawnThingDef;
+        public ThingDef? postExplosionSpawnThingDef;
         public float postExplosionSpawnChance;
         public int postExplosionSpawnThingCount = 1;
 

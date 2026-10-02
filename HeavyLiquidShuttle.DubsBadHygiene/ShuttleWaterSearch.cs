@@ -10,7 +10,7 @@ namespace HeavyLiquidShuttleMod
         {
             return ShuttleSearch<PlumbingNet>.CheckCellsAroundShuttle(
                 shuttle,
-                (thing, _) =>
+                thing =>
                 {
                     CompPipe? pipe = thing.TryGetComp<CompPipe>();
 

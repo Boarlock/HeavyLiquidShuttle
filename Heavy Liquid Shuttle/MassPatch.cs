@@ -23,8 +23,21 @@ namespace HeavyLiquidShuttleMod
 
             if (shuttle != null)
             {
-                __result += shuttle.CalculateMassFromTanks();
+                __result += CalculateMassFromTanks(shuttle);
             }
+        }
+
+        private static float CalculateMassFromTanks(HeavyLiquidShuttle shuttle)
+        {
+            float totalMass = 0f;
+
+            if (shuttle.TankA.content != null)
+                totalMass += shuttle.TankA.tankStorage * shuttle.TankA.content.density;
+
+            if (shuttle.TankB.content != null)
+                totalMass += shuttle.TankB.tankStorage * shuttle.TankB.content.density;
+
+            return totalMass;
         }
     } 
 }
