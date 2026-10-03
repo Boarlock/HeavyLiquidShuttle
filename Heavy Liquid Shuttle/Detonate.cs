@@ -11,7 +11,6 @@ namespace HeavyLiquidShuttleMod
         private CompProperties_ShuttleExplosive Props;
         private ShuttleExplosion Comp;
 
-        private bool wickStarted;
         private int wickTicksLeft;
         private Thing? wickInstigator;
         private Sustainer? wickSoundSustainer;
@@ -27,10 +26,10 @@ namespace HeavyLiquidShuttleMod
 
         public void StartWick(Thing? instigator)
         {
-            if (wickStarted)
+            if (Comp.wickStarted)
                 return;
 
-            wickStarted = true;
+            Comp.wickStarted = true;
             wickInstigator = instigator;
             wickTicksLeft = Props.wickTicks.RandomInRange;
 
@@ -43,7 +42,7 @@ namespace HeavyLiquidShuttleMod
 
         public void Tick()
         {
-            if (!wickStarted)
+            if (!Comp.wickStarted)
                 return;
 
             if (wickSoundSustainer == null)
@@ -65,7 +64,7 @@ namespace HeavyLiquidShuttleMod
 
         public void DetonateNow()
         {
-            wickStarted = false;
+            Comp.wickStarted = false;
 
             if (wickSoundSustainer != null)
             {

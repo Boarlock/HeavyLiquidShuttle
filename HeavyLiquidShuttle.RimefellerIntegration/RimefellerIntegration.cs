@@ -1,7 +1,6 @@
 ﻿using Rimefeller;
 using UnityEngine;
 using Verse;
-using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {

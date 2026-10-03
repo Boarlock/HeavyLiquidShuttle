@@ -1,18 +1,14 @@
 ﻿using PipeSystem;
 using System.Collections.Generic;
-using System.Resources;
 using Verse;
-using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {
     public static class ShuttleVESearch
     {
-        public static Dictionary<StoredTypeDef, HashSet<PipeNet>> CheckCellsAroundShuttle(
-            HeavyLiquidShuttle shuttle)
+        public static Dictionary<StoredTypeDef, HashSet<PipeNet>> CheckCellsAroundShuttle(HeavyLiquidShuttle shuttle)
         {
-            Dictionary<StoredTypeDef, HashSet<PipeNet>> nets =
-                new Dictionary<StoredTypeDef, HashSet<PipeNet>>();
+            Dictionary<StoredTypeDef, HashSet<PipeNet>> nets = new Dictionary<StoredTypeDef, HashSet<PipeNet>>();
 
             if (shuttle == null)
                 return nets;
@@ -67,17 +63,17 @@ namespace HeavyLiquidShuttleMod
         {
             switch (defName)
             {
-                case "Deepchem":
+                case "VCHE_DeepchemNet":
                     return CachedDefs.Deepchem;
-                case "Chemfuel":
+                case "VCHE_ChemfuelNet":
                     return CachedDefs.Chemfuel;
-                case "Helixien gas":
+                case "VHGE_HelixienNet":
                     return CachedDefs.Helixien;
-                case "Scarlet sludge":
+                case "ScarletNet":
                     return CachedDefs.Scarlet;
-                case "Oxygen":
+                case "VGE_OxygenNet":
                     return CachedDefs.Oxygen;
-                case "Astrofuel":
+                case "VGE_AstrofuelNet":
                     return CachedDefs.Astrofuel;
                 default:
                     return null;

@@ -1,6 +1,5 @@
 ﻿using RimWorld;
 using UnityEngine;
-using System;
 using Verse;
 
 namespace HeavyLiquidShuttleMod
@@ -52,6 +51,7 @@ namespace HeavyLiquidShuttleMod
     {
         private int explosionRadius;
         public int ExplosionRadius => explosionRadius;
+        public bool wickStarted;
 
         public CompProperties_ShuttleExplosive Props => (CompProperties_ShuttleExplosive)props;
         public HeavyLiquidShuttle Shuttle => parent.GetComp<HeavyLiquidShuttle>();

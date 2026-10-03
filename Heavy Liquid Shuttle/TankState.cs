@@ -1,5 +1,4 @@
 ﻿using Verse;
-using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -43,14 +42,6 @@ namespace HeavyLiquidShuttleMod
             public float physicalCapacity = 1250f;
         }
 
-        public class StoredTypeDef : Def
-        {
-            public float unitsPerLiter;
-            public float density;
-
-            public float unitsPerExplosionRadius;
-        }
-
         public enum WaterState
         {
             Treated,
@@ -70,6 +61,14 @@ namespace HeavyLiquidShuttleMod
         {
             return liters * def.unitsPerLiter;
         }
+    }
+
+    public class StoredTypeDef : Def
+    {
+        public float unitsPerLiter;
+        public float density;
+
+        public float unitsPerExplosionRadius;
     }
 
     public static class CachedDefs

@@ -6,7 +6,6 @@ using System.Linq;
 using UnityEngine;
 using Verse;
 using Verse.AI;
-using static HeavyLiquidShuttleMod.TankState;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -69,7 +68,6 @@ namespace HeavyLiquidShuttleMod
         }
 
         // Integration instances
-        internal object? sharedIntegration;
         internal object? dbhIntegration;
         internal object? rimefellerIntegration;
         internal object? veIntegration;
@@ -105,6 +103,7 @@ namespace HeavyLiquidShuttleMod
 
         // Used for Mod Integration special actions
         private Detonate? detonation;
+        public bool chemfuelAllowance = false;
 
         // Helpers for returning Shuttle Tanks
         public TankState? GetTankForReceive(StoredTypeDef def)
@@ -158,10 +157,10 @@ namespace HeavyLiquidShuttleMod
                 defaultLabel = "Lock Tank A",
                 defaultDesc = "Tank A: Lock this tank so it cannot intake or output its contents.",
                 icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Lock"),
-                isActive = () => this.TankA.isLocked,
+                isActive = () => TankA.isLocked,
                 toggleAction = () =>
                 {
-                    ToggleLock(this.TankA);
+                    ToggleLock(TankA);
                 }
             };
             yield return new Command_Toggle
@@ -169,10 +168,10 @@ namespace HeavyLiquidShuttleMod
                 defaultLabel = "Lock Tank B",
                 defaultDesc = "Tank B: Lock this tank so it cannot intake or output its contents.",
                 icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Lock"),
-                isActive = () => this.TankB.isLocked,
+                isActive = () => TankB.isLocked,
                 toggleAction = () =>
                 {
-                    ToggleLock(this.TankB);
+                    ToggleLock(TankB);
                 }
             };
 
@@ -187,18 +186,16 @@ namespace HeavyLiquidShuttleMod
                     icon = ContentFinder<Texture2D>.Get(drainIcon),
                     action = () =>
                     {
-                        if (TankA.content == CachedDefs.Water)
+                        IntVec3 spillCell;
+
+                        if (TankA.content == CachedDefs.Oil)
                         {
-                            TankA.isContaminated = false;
-                        }
-                        else if (TankA.content == CachedDefs.Oil)
-                        {
-                            IntVec3 spillCell = GetTankCell(true);
+                            spillCell = GetTankCell(true);
                             OilSpillIntegration?.Invoke(TankA.tankStorage, spillCell);
                         }
                         else if (TankA.content == CachedDefs.Sewage)
                         {
-                            IntVec3 spillCell = GetTankCell(true);
+                            spillCell = GetTankCell(true);
                             SewageSpillIntegration?.Invoke(TankA.tankStorage, spillCell);
                         }
 
@@ -220,18 +217,16 @@ namespace HeavyLiquidShuttleMod
                     icon = ContentFinder<Texture2D>.Get(drainIcon),
                     action = () =>
                     {
-                        if (TankB.content == CachedDefs.Water)
+                        IntVec3 spillCell;
+
+                        if (TankB.content == CachedDefs.Oil)
                         {
-                            TankB.isContaminated = false;
-                        }
-                        else if (TankB.content == CachedDefs.Oil)
-                        {
-                            IntVec3 spillCell = GetTankCell(false);
+                            spillCell = GetTankCell(false);
                             OilSpillIntegration?.Invoke(TankB.tankStorage, spillCell);
                         }
                         else if (TankB.content == CachedDefs.Sewage)
                         {
-                            IntVec3 spillCell = GetTankCell(false);
+                            spillCell = GetTankCell(false);
                             SewageSpillIntegration?.Invoke(TankB.tankStorage, spillCell);
                         }
 
@@ -302,8 +297,8 @@ namespace HeavyLiquidShuttleMod
             {
                 return new Command_Toggle
                 {
-                    defaultLabel = "Discharge " + def.label,
-                    defaultDesc = "Tank A: Discharge into an adjacent " + def.label + " network.",
+                    defaultLabel = "Discharge " + def.defName,
+                    defaultDesc = "Tank A: Discharge into an adjacent " + def.defName + " network.",
                     icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Discharge"),
                     isActive = () =>
                     {
@@ -323,8 +318,8 @@ namespace HeavyLiquidShuttleMod
             {
                 return new Command_Toggle
                 {
-                    defaultLabel = "Discharge " + def.label,
-                    defaultDesc = "Tank B: Discharge into an adjacent " + def.label + " network.",
+                    defaultLabel = "Discharge " + def.defName,
+                    defaultDesc = "Tank B: Discharge into an adjacent " + def.defName + " network.",
                     icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Discharge"),
                     isActive = () =>
                     {
@@ -343,7 +338,7 @@ namespace HeavyLiquidShuttleMod
 
         private void TryStartTankCleaning(bool handlingA)
         {
-            IntVec3 refCell = this.parent.OccupiedRect().First();
+            IntVec3 refCell = parent.OccupiedRect().First();
             IntVec3 jobCell = GetTankCell(handlingA);
 
             if (!jobCell.IsValid)
@@ -445,7 +440,7 @@ namespace HeavyLiquidShuttleMod
 
             int i = 0;
 
-            foreach (IntVec3 shuttleCell in this.parent.OccupiedRect())
+            foreach (IntVec3 shuttleCell in parent.OccupiedRect())
             {
                 if (cell == i)
                 {
@@ -468,19 +463,15 @@ namespace HeavyLiquidShuttleMod
 
             if (TankA.content == null)
                 tankA = $"Tank A: Empty{contaminatedA} |  Capacity: 0 / {TankA.props.physicalCapacity} Liters\n";
-
             else if (TankA.content == CachedDefs.Water)
                 tankA = $"Tank A: {TankA.content} ({TankA.waterQuality}) |  Capacity: {TankA.tankStorage:F0} / {TankA.props.physicalCapacity} Liters\n";
-            
             else
                 tankA = $"Tank A: {TankA.content} |  Capacity: {TankA.tankStorage:F0} / {TankA.props.physicalCapacity} Liters\n";
 
             if (TankB.content == null)
                 tankB = $"Tank B: Empty{contaminatedB} |  Capacity: 0 / {TankB.props.physicalCapacity} Liters";
-
             else if (TankB.content == CachedDefs.Water)
                 tankB = $"Tank B: {TankB.content} ({TankB.waterQuality}) |  Capacity: {TankB.tankStorage:F0} / {TankB.props.physicalCapacity} Liters";
-            
             else
                 tankB = $"Tank B: {TankB.content} |  Capacity: {TankB.tankStorage:F0} / {TankB.props.physicalCapacity} Liters";
 
@@ -573,7 +564,7 @@ namespace HeavyLiquidShuttleMod
             Scarlet     // 6
         }
 
-        private static TankState.StoredTypeDef? ConvertOldStoredType(StoredType oldType)
+        private static StoredTypeDef? ConvertOldStoredType(StoredType oldType)
         {
             return oldType switch
             {

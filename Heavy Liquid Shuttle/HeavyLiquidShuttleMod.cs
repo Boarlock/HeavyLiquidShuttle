@@ -11,6 +11,7 @@ namespace HeavyLiquidShuttleMod
     {
         public static bool DubsBadHygieneActive { get; private set; }
         public static bool RimefellerActive { get; private set; }
+        public static bool VEFActive { get; private set; }
         public static bool VEChemfuelActive { get; private set; }
         public static bool VEHelixienActive { get; private set; }
         public static bool VEScarletActive { get; private set; }
@@ -23,6 +24,7 @@ namespace HeavyLiquidShuttleMod
 
             DubsBadHygieneActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Dubwise.DubsBadHygiene");
             RimefellerActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Dubwise.Rimefeller");
+            VEFActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "OskarPotocki.VanillaFactionsExpanded.Core");
             VEChemfuelActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.VChemfuelE");
             VEHelixienActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "VanillaExpanded.HelixienGas");
             VEScarletActive = LoadedModManager.RunningModsListForReading.Any(mod => mod.PackageIdPlayerFacing == "Ushanka.LuciferiumExpansion");
@@ -34,10 +36,7 @@ namespace HeavyLiquidShuttleMod
             if (RimefellerActive)
                 LibraryLoaders.RFLoad();
 
-            if (VEChemfuelActive || 
-                VEHelixienActive || 
-                VEScarletActive || 
-                VEGravshipActive)
+            if (VEFActive)
                 LibraryLoaders.VELoad();
 
             Application.focusChanged += HeavyLiquidShuttleManager.OnApplicationFocusChanged;
@@ -116,7 +115,7 @@ namespace HeavyLiquidShuttleMod
             string integrationPath = Path.Combine(coreDirectory, "..", "--optional", "VE", "HeavyLiquidShuttle.VanillaExpandedIntegration.dll");
             integrationPath = Path.GetFullPath(integrationPath);
 
-            Log.Message("[HeavyLiquidShuttle] Vanilla Chemfuel Expanded or Vanilla Helixien Gas Expanded detected, preparing to load.");
+            Log.Message("[HeavyLiquidShuttle] Vanilla Expanded detected, preparing to load.");
 
             if (!File.Exists(integrationPath))
             {
