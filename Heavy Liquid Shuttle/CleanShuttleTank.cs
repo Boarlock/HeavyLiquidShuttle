@@ -100,7 +100,7 @@ namespace HeavyLiquidShuttleMod
             if (isTankA)
             {
                 if (!jobFailed)
-                    shuttle.TankA.isContaminated = false;
+                    shuttle.TankA!.isContaminated = false;
 
                 shuttle.CleaningTankA = false;
                 return true;
@@ -108,7 +108,7 @@ namespace HeavyLiquidShuttleMod
             else if (isTankB)
             {
                 if (!jobFailed)
-                    shuttle.TankB.isContaminated = false;
+                    shuttle.TankB!.isContaminated = false;
 
                 shuttle.CleaningTankB = false;
                 return true;

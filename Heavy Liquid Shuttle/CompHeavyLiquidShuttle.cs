@@ -9,7 +9,7 @@ using Verse.AI;
 
 namespace HeavyLiquidShuttleMod
 {
-    public class CompProperties_HLShuttleCarrier : CompProperties
+    public class CompProperties_HLShuttleCarrier : CompProperties_Shuttle
     {
         public CompProperties_HLShuttleCarrier()
         {
@@ -17,8 +17,10 @@ namespace HeavyLiquidShuttleMod
         }
     }
 
-    public class HeavyLiquidShuttle : ThingComp
+    public class HeavyLiquidShuttle : CompShuttle
     {
+        public new CompProperties_HLShuttleCarrier Props => (CompProperties_HLShuttleCarrier)props;
+
         private bool initialized = false;
         private bool cleanedUp = false;
 
@@ -31,8 +33,11 @@ namespace HeavyLiquidShuttleMod
                 CreateIntegrations();
             }
 
-            TankA.transferEnabled = false;
-            TankB.transferEnabled = false;
+            TankA ??= new TankState();
+            TankB ??= new TankState();
+
+            TankA!.transferEnabled = false;
+            TankB!.transferEnabled = false;
 
         }
 
@@ -64,6 +69,10 @@ namespace HeavyLiquidShuttleMod
         public override void Initialize(CompProperties props)
         {
             base.Initialize(props);
+
+            TankA ??= new TankState();
+            TankB ??= new TankState();
+
             explosionComponent = parent.TryGetComp<ShuttleExplosion>();
         }
 
@@ -84,8 +93,8 @@ namespace HeavyLiquidShuttleMod
 
 
         // Tank specific state data
-        public TankState TankA = new TankState();
-        public TankState TankB = new TankState();
+        public TankState? TankA;
+        public TankState? TankB;
         public bool CleaningTankA;
         public bool CleaningTankB;
 
@@ -108,7 +117,7 @@ namespace HeavyLiquidShuttleMod
         // Helpers for returning Shuttle Tanks
         public TankState? GetTankForReceive(StoredTypeDef def)
         {
-            if (!TankA.isLocked)
+            if (TankA!.isLocked)
             {
                 if (TankA.content == null)
                     return TankA;
@@ -117,7 +126,7 @@ namespace HeavyLiquidShuttleMod
                     return TankA;
             }
 
-            if (!TankB.isLocked)
+            if (TankB!.isLocked)
             {
                 if (TankB.content == null)
                     return TankB;
@@ -129,13 +138,13 @@ namespace HeavyLiquidShuttleMod
         }
         public TankState? GetTankForSupply(StoredTypeDef def)
         {
-            if (TankA.content != null && 
+            if (TankA!.content != null && 
                 TankA.content == def && 
                 TankA.tankStorage > 0f && 
                 !TankA.isLocked)
                 return TankA;
 
-            if (TankB.content != null && 
+            if (TankB!.content != null && 
                 TankB.content == def && 
                 TankB.tankStorage > 0f && 
                 !TankB.isLocked)
@@ -157,10 +166,10 @@ namespace HeavyLiquidShuttleMod
                 defaultLabel = "Lock Tank A",
                 defaultDesc = "Tank A: Lock this tank so it cannot intake or output its contents.",
                 icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Lock"),
-                isActive = () => TankA.isLocked,
+                isActive = () => TankA!.isLocked,
                 toggleAction = () =>
                 {
-                    ToggleLock(TankA);
+                    ToggleLock(TankA!);
                 }
             };
             yield return new Command_Toggle
@@ -168,16 +177,16 @@ namespace HeavyLiquidShuttleMod
                 defaultLabel = "Lock Tank B",
                 defaultDesc = "Tank B: Lock this tank so it cannot intake or output its contents.",
                 icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Lock"),
-                isActive = () => TankB.isLocked,
+                isActive = () => TankB!.isLocked,
                 toggleAction = () =>
                 {
-                    ToggleLock(TankB);
+                    ToggleLock(TankB!);
                 }
             };
 
-            if (TankA.tankStorage > 0f)
+            if (TankA!.tankStorage > 0f)
             {
-                string drainIcon = TankA.content == CachedDefs.Helixien ? "UI/Gizmo/Vent" : "UI/Gizmo/Drain";
+                string drainIcon = TankA!.content == CachedDefs.Helixien ? "UI/Gizmo/Vent" : "UI/Gizmo/Drain";
 
                 yield return new Command_Action
                 {
@@ -206,7 +215,7 @@ namespace HeavyLiquidShuttleMod
                     }
                 };
             }
-            if (TankB.tankStorage > 0f)
+            if (TankB!.tankStorage > 0f)
             {
                 string drainIcon = TankB.content == CachedDefs.Helixien ? "UI/Gizmo/Vent" : "UI/Gizmo/Drain";
 
@@ -302,11 +311,11 @@ namespace HeavyLiquidShuttleMod
                     icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Discharge"),
                     isActive = () =>
                     {
-                        return shuttle.TankA.transferEnabled;
+                        return shuttle.TankA!.transferEnabled;
                     },
                     toggleAction = () =>
                     {
-                        if (shuttle.TankA.tankStorage <= 0f)
+                        if (shuttle.TankA!.tankStorage <= 0f)
                             return;
 
                         shuttle.ToggleTransfer(shuttle.TankA);
@@ -323,11 +332,11 @@ namespace HeavyLiquidShuttleMod
                     icon = ContentFinder<Texture2D>.Get("UI/Gizmo/Discharge"),
                     isActive = () =>
                     {
-                        return shuttle.TankB.transferEnabled;
+                        return shuttle.TankB!.transferEnabled;
                     },
                     toggleAction = () =>
                     {
-                        if (shuttle.TankB.tankStorage <= 0f)
+                        if (shuttle.TankB!.tankStorage <= 0f)
                             return;
 
                         shuttle.ToggleTransfer(shuttle.TankB);
@@ -457,25 +466,50 @@ namespace HeavyLiquidShuttleMod
         {
             string tankA;
             string tankB;
+            string explosiveness = "Explosiveness: None";
 
-            string contaminatedA = TankA.isContaminated ? " (Contaminated)" : "";
-            string contaminatedB = TankB.isContaminated ? " (Contaminated)" : "";
+            string contaminatedA = TankA!.isContaminated ? " (Contaminated)" : "";
+            string contaminatedB = TankB!.isContaminated ? " (Contaminated)" : "";
 
             if (TankA.content == null)
-                tankA = $"Tank A: Empty{contaminatedA} |  Capacity: 0 / {TankA.props.physicalCapacity} Liters\n";
+                tankA = $"Tank A: Empty{contaminatedA} |  0 / {TankA.props.physicalCapacity} Liters\n";
             else if (TankA.content == CachedDefs.Water)
-                tankA = $"Tank A: {TankA.content} ({TankA.waterQuality}) |  Capacity: {TankA.tankStorage:F0} / {TankA.props.physicalCapacity} Liters\n";
+                tankA = $"Tank A: {TankA.content} ({TankA.waterQuality}) |  {TankA.tankStorage:F0} / {TankA.props.physicalCapacity} Liters\n";
             else
-                tankA = $"Tank A: {TankA.content} |  Capacity: {TankA.tankStorage:F0} / {TankA.props.physicalCapacity} Liters\n";
+                tankA = $"Tank A: {TankA.content} |  {TankA.tankStorage:F0} / {TankA.props.physicalCapacity} Liters\n";
 
             if (TankB.content == null)
-                tankB = $"Tank B: Empty{contaminatedB} |  Capacity: 0 / {TankB.props.physicalCapacity} Liters";
+                tankB = $"Tank B: Empty{contaminatedB} |  0 / {TankB.props.physicalCapacity} Liters\n";
             else if (TankB.content == CachedDefs.Water)
-                tankB = $"Tank B: {TankB.content} ({TankB.waterQuality}) |  Capacity: {TankB.tankStorage:F0} / {TankB.props.physicalCapacity} Liters";
+                tankB = $"Tank B: {TankB.content} ({TankB.waterQuality}) |  {TankB.tankStorage:F0} / {TankB.props.physicalCapacity} Liters\n";
             else
-                tankB = $"Tank B: {TankB.content} |  Capacity: {TankB.tankStorage:F0} / {TankB.props.physicalCapacity} Liters";
+                tankB = $"Tank B: {TankB.content} |  {TankB.tankStorage:F0} / {TankB.props.physicalCapacity} Liters\n";
 
-            return tankA + tankB;
+            if (explosionComponent != null)
+            {
+                int radius = explosionComponent.ExplosionRadius;
+                explosiveness = "Explosiveness: ";
+
+                if (radius > 15)
+                    explosiveness += "Massive";
+                else if (radius >= 9)
+                    explosiveness += "Extreme";
+                else if (radius >= 5)
+                    explosiveness += "High";
+                else if (radius >= 2)
+                    explosiveness += "Moderate";
+                else if (radius > 0)
+                    explosiveness += "Small";
+                else
+                    explosiveness += "None";
+            }
+
+            string baseText = base.CompInspectStringExtra();
+
+            if (!baseText.NullOrEmpty())
+                return tankA + tankB + explosiveness + "\n" + baseText;
+
+            return tankA + tankB + explosiveness;
         }
 
         public override void PostPostApplyDamage(DamageInfo dinfo, float totalDamageDealt)
@@ -494,16 +528,23 @@ namespace HeavyLiquidShuttleMod
 
         public override void CompTick()
         {
+            base.CompTick();
+
             detonation?.Tick();
         }
 
         public override void PostExposeData()
         {
+            base.PostExposeData();
+
             Scribe_Deep.Look(ref TankA, "tankA");
             Scribe_Deep.Look(ref TankB, "tankB");
 
             if (Scribe.mode == LoadSaveMode.LoadingVars)
             {
+                TankA ??= new TankState();
+                TankB ??= new TankState();
+
                 // Old migration code for backwards compatibility
                 Scribe_Values.Look(ref oldTankAStorage, "tankAStorage", 0f);
                 Scribe_Values.Look(ref oldTankBStorage, "tankBStorage", 0f);
@@ -521,8 +562,8 @@ namespace HeavyLiquidShuttleMod
 
             if (Scribe.mode == LoadSaveMode.PostLoadInit)
             {
-                TankA.isLocked = oldTankALocked;
-                TankB.isLocked = oldTankBLocked;
+                TankA!.isLocked = oldTankALocked;
+                TankB!.isLocked = oldTankBLocked;
 
                 TankA.isContaminated = oldTankAContamination;
                 TankB.isContaminated = oldTankBContamination;

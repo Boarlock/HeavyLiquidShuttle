@@ -31,9 +31,9 @@ namespace HeavyLiquidShuttleMod
             if (cleanedUp)
                 return;
 
-            Shuttle.TankA.receiveAllowance = 1f;
+            Shuttle.TankA!.receiveAllowance = 1f;
             Shuttle.TankA.supplyAllowance = 1f;
-            Shuttle.TankB.receiveAllowance = 1f;
+            Shuttle.TankB!.receiveAllowance = 1f;
             Shuttle.TankB.supplyAllowance = 1f;
 
             AdjacentXNets = ShuttleWaterSearch.CheckCellsAroundShuttle(Shuttle);
@@ -363,13 +363,13 @@ namespace HeavyLiquidShuttleMod
             if (AdjacentXNets.Count <= 0)
                 yield break;
 
-            if (Shuttle.TankA.content == LiquidTypeX && Shuttle.TankA.tankStorage > 0f)
+            if (Shuttle.TankA!.content == LiquidTypeX && Shuttle.TankA.tankStorage > 0f)
                 yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, true, LiquidTypeX)!;
 
             else if (Shuttle.TankA.content == LiquidTypeY && Shuttle.TankA.tankStorage > 0f)
                 yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, true, LiquidTypeY)!;
 
-            if (Shuttle.TankB.content == LiquidTypeX && Shuttle.TankB.tankStorage > 0f)
+            if (Shuttle.TankB!.content == LiquidTypeX && Shuttle.TankB.tankStorage > 0f)
                 yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, false, LiquidTypeX)!;
 
             else if (Shuttle.TankB.content == LiquidTypeY && Shuttle.TankB.tankStorage > 0f)

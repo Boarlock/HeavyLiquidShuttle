@@ -2,7 +2,7 @@
 
 namespace HeavyLiquidShuttleMod
 {
-    public class TankState
+    public class TankState : IExposable
     {
         // Keeping this in the constructor to be able to change these later with different research projects.
         public TankState()

@@ -25,8 +25,8 @@ namespace HeavyLiquidShuttleMod
                     if (shuttle == null)
                         continue;
 
-                    shuttle.TankA.transferEnabled = false;
-                    shuttle.TankB.transferEnabled = false;
+                    shuttle.TankA!.transferEnabled = false;
+                    shuttle.TankB!.transferEnabled = false;
                 }
             }
         }

@@ -1,13 +1,9 @@
-﻿using HarmonyLib;
-using PipeSystem;
+﻿using PipeSystem;
 using RimWorld;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Threading.Tasks;
 using UnityEngine;
 using Verse;
-using static HeavyLiquidShuttleMod.TankState;
-using static VEF.Graphics.TaggedDefProperties;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -100,9 +96,9 @@ namespace HeavyLiquidShuttleMod
 
             shuttle.chemfuelAllowance = false;
 
-            shuttle.TankA.receiveAllowance = 1f;
+            shuttle.TankA!.receiveAllowance = 1f;
             shuttle.TankA.supplyAllowance = 1f;
-            shuttle.TankB.receiveAllowance = 1f;
+            shuttle.TankB!.receiveAllowance = 1f;
             shuttle.TankB.supplyAllowance = 1f;
             refuelAllowance = 1f;
 
@@ -477,10 +473,10 @@ namespace HeavyLiquidShuttleMod
             {
                 if (resource.adjacentNets.Count > 0)
                 {
-                    if (shuttle.TankA.content == resource.def && shuttle.TankA.tankStorage > 0f)
+                    if (shuttle.TankA!.content == resource.def && shuttle.TankA.tankStorage > 0f)
                         yield return HeavyLiquidShuttle.CreateDischargeGizmo(shuttle, true, resource.def!);
 
-                    if (shuttle.TankB.content == resource.def && shuttle.TankB.tankStorage > 0f)
+                    if (shuttle.TankB!.content == resource.def && shuttle.TankB.tankStorage > 0f)
                         yield return HeavyLiquidShuttle.CreateDischargeGizmo(shuttle, false, resource.def!);
                 }
             }
