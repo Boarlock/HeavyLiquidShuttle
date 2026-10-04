@@ -1,10 +1,13 @@
-﻿using RimUIText = RimUI.Elements.Text;
-using RimUI.Adapter;
+﻿/*using RimUI.Adapter;
 using RimUI.Components;
+using RimUI.Core;
 using RimUI.Elements;
 using RimUI.Layout;
+using RimUI.Rendering;
 using RimWorld;
+using UnityEngine;
 using Verse;
+using RimUIText = RimUI.Elements.Text;
 
 namespace HeavyLiquidShuttleMod
 {
@@ -16,10 +19,8 @@ namespace HeavyLiquidShuttleMod
 
         public ITab_HeavyLiquidShuttle()
         {
-            labelKey = "TabHeavyLiquidShuttle";
-
-            TankA = Shuttle.TankA!;
-            TankB = Shuttle.TankB!;
+            size = new Vector2(500f, 550f);
+            labelKey = "Tanks";
         }
 
         static ITab_HeavyLiquidShuttle()
@@ -32,10 +33,7 @@ namespace HeavyLiquidShuttleMod
 
         public override void TabTick()
         {
-            if (!StillValid)
-                return;
-
-            if (!Shuttle.stateUpdated)
+            if (!Shuttle.stateDirty)
                 return;
 
             int radius = Comp.ExplosionRadius;
@@ -45,8 +43,8 @@ namespace HeavyLiquidShuttleMod
             tankARatio = TankA.Storage / TankA.Capacity;
             tankBRatio = TankB.Storage / TankB.Capacity;
 
-            tankAContent = new RimUIText($"{TankA.Storage} / {TankA.Capacity} Liters");
-            tankBContent = new RimUIText($"{TankB.Storage} / {TankB.Capacity} Liters");
+            tankARatioText = new RimUIText($"{TankA.Storage} / {TankA.Capacity} Liters");
+            tankBRatioText = new RimUIText($"{TankB.Storage} / {TankB.Capacity} Liters");
 
             if (TankA.Content != null)
                 tankAMassFloat = TankA.Storage * TankA.Content.density;
@@ -116,21 +114,21 @@ namespace HeavyLiquidShuttleMod
                 explosiveRisk = new RimUIText("No Explosive Risk");
 
             Initialized = true;
-            Shuttle.stateUpdated = false;
+            Shuttle.stateDirty = false;
         }
 
         private bool Initialized = false;
 
-        private TankState TankA;
-        private TankState TankB;
+        private TankState TankA => Shuttle.TankA!;
+        private TankState TankB => Shuttle.TankB!;
 
         private static RimUIText? headerText;
         private static RimUIText? tankATitle;
         private static RimUIText? tankBTitle;
         private float tankARatio;
         private float tankBRatio;
-        private RimUIText? tankAContent;
-        private RimUIText? tankBContent;
+        private RimUIText? tankARatioText;
+        private RimUIText? tankBRatioText;
         private RimUIText? tankAMass;
         private RimUIText? tankBMass;
         private RimUIText? tankALocked;
@@ -151,8 +149,9 @@ namespace HeavyLiquidShuttleMod
                 return;
 
             var grid = new Grid();
+
             // Row 1
-            grid.Cell(
+            grid!.Cell(
                 12, 
                 new Field().Add(
                     new Field().Add(
@@ -164,7 +163,7 @@ namespace HeavyLiquidShuttleMod
                 new Field().Add(
                     tankATitle).Add(
                     new ProgressBar(() => tankARatio)).Add(
-                    tankAContent).Add(
+                    tankARatioText).Add(
                     tankAMass).Add(
                     tankALocked).Add(
                     tankANetSupply).Add(
@@ -175,7 +174,7 @@ namespace HeavyLiquidShuttleMod
                 new Field().Add(
                     tankBTitle).Add(
                     new ProgressBar(() => tankBRatio)).Add(
-                    tankBContent).Add(
+                    tankBRatioText).Add(
                     tankBMass).Add(
                     tankBLocked).Add(
                     tankBNetSupply).Add(
@@ -195,7 +194,6 @@ namespace HeavyLiquidShuttleMod
                 new Field().Add(
                     explosiveRisk));
 
-            new UiWindow(grid).Show();
         }
     }
-}
+}*/

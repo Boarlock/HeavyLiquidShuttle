@@ -41,13 +41,13 @@ namespace HeavyLiquidShuttleMod
 
         public StoredTypeDef? Content
         {
-            get => Content;
+            get => content;
             set
             {
                 if (!CachedDefs.IsValid(value))
                     throw new ArgumentException($"Invalid StoredTypeDef assigned to TankState: {value!.defName}");
 
-                Content = value;
+                content = value;
             }
         }
 

@@ -23,7 +23,6 @@ namespace HeavyLiquidShuttleMod
         public new CompProperties_HLShuttleCarrier Props => (CompProperties_HLShuttleCarrier)props;
 
         private bool initialized = false;
-        private bool cleanedUp = false;
 
         public override void PostSpawnSetup(bool respawningAfterLoad)
         {
@@ -48,7 +47,6 @@ namespace HeavyLiquidShuttleMod
         public const TransferState CachedReceiving = TransferState.Receiving;
 
         public long currentCycle = -1;
-        public bool stateUpdated = false;
 
         private void TickCycle()
         {
@@ -107,8 +105,6 @@ namespace HeavyLiquidShuttleMod
             TankA.lastReceiveCycle = currentCycle;
             TankB.lastSupplyCycle = currentCycle;
             TankB.lastReceiveCycle = currentCycle;
-
-            stateUpdated = true;
         }
 
         private void CreateIntegrations()
@@ -187,7 +183,7 @@ namespace HeavyLiquidShuttleMod
         // Helpers for returning Shuttle Tanks
         public TankState? GetTankForReceive(StoredTypeDef def)
         {
-            if (TankA!.isLocked)
+            if (!TankA!.isLocked)
             {
                 if (TankA.Content == null)
                     return TankA;
@@ -196,7 +192,7 @@ namespace HeavyLiquidShuttleMod
                     return TankA;
             }
 
-            if (TankB!.isLocked)
+            if (!TankB!.isLocked)
             {
                 if (TankB.Content == null)
                     return TankB;
@@ -225,9 +221,6 @@ namespace HeavyLiquidShuttleMod
 
         public override IEnumerable<Gizmo> CompGetGizmosExtra()
         {
-            if (cleanedUp)
-                yield break;
-
             foreach (Gizmo gizmo in base.CompGetGizmosExtra())
                 yield return gizmo;
 
@@ -611,8 +604,8 @@ namespace HeavyLiquidShuttleMod
                 // Old migration code for backwards compatibility
                 Scribe_Values.Look(ref oldTankAStorage, "tankAStorage", 0f);
                 Scribe_Values.Look(ref oldTankBStorage, "tankBStorage", 0f);
-                Scribe_Values.Look(ref oldTankAContent, "tankAContent", StoredType.Empty);
-                Scribe_Values.Look(ref oldTankBContent, "tankBContent", StoredType.Empty);
+                Scribe_Values.Look(ref oldTankAContent, "tankARatioText", StoredType.Empty);
+                Scribe_Values.Look(ref oldTankBContent, "tankBRatioText", StoredType.Empty);
                 Scribe_Values.Look(ref oldTankALocked, "tankALocked", false);
                 Scribe_Values.Look(ref oldTankBLocked, "tankBLocked", false);
                 Scribe_Values.Look(ref oldTankAContamination, "tankAContaminated", false);
