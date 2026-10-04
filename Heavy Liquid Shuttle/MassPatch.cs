@@ -31,11 +31,11 @@ namespace HeavyLiquidShuttleMod
         {
             float totalMass = 0f;
 
-            if (shuttle.TankA!.content != null)
-                totalMass += shuttle.TankA.tankStorage * shuttle.TankA.content.density;
+            if (shuttle.TankA!.Content != null)
+                totalMass += shuttle.TankA.Storage * shuttle.TankA.Content.density;
 
-            if (shuttle.TankB!.content != null)
-                totalMass += shuttle.TankB.tankStorage * shuttle.TankB.content.density;
+            if (shuttle.TankB!.Content != null)
+                totalMass += shuttle.TankB.Storage * shuttle.TankB.Content.density;
 
             return totalMass;
         }

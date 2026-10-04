@@ -1,24 +1,61 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Lib.Harmony" Version="2.4.2" />
-  </ItemGroup>
+	<PropertyGroup>
+		<RimWorldManagedPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed</RimWorldManagedPath>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed\Assembly-CSharp.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
-    </Reference>
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.48">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Lib.Harmony" Version="2.4.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="Assembly-CSharp">
+            <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed\Assembly-CSharp.dll</HintPath>
+			<Private>false</Private>
+        </Reference>
+        <Reference Include="RimUI">
+            <HintPath>lib\RimUI.dll</HintPath>
+			<Private>true</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+			<Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.IMGUIModule">
+            <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+			<Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+	<Target Name="MergeRimUI" AfterTargets="Build">
+		
+		<ItemGroup>
+			<AssembliesToMerge Include="$(TargetPath)" />
+			<AssembliesToMerge Include="$(MSBuildProjectDirectory)\lib\RimUI.dll" />
+
+			<ILRepackLibraryPath Include="$(MSBuildProjectDirectory)\lib" />
+			<ILRepackLibraryPath Include="$(RimWorldManagedPath)" />
+			<ILRepackLibraryPath Include="C:\Users\Administrator\.nuget\packages\lib.harmony\2.4.2\lib\net48" />
+		</ItemGroup>
+
+		<PropertyGroup>
+			<Internalize>true</Internalize>
+			<MergedOutput>$(TargetDir)HLS_Merged.dll</MergedOutput>
+		</PropertyGroup>
+
+		<ILRepack InputAssemblies="@(AssembliesToMerge)" OutputFile="$(MergedOutput)" TargetKind="SameAsPrimaryAssembly" DebugInfo="true" AllowDuplicateResources="false" Parallel="true" LibraryPath="@(ILRepackLibraryPath)" Internalize="$(Internalize)" />
+		<Copy SourceFiles="$(MergedOutput)" DestinationFiles="$(TargetPath)" OverwriteReadOnlyFiles="true" />
+		<Delete Files="$(MergedOutput)" />
+
+	</Target>
 
 </Project>

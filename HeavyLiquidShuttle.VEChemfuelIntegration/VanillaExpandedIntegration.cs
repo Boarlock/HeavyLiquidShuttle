@@ -336,13 +336,13 @@ namespace HeavyLiquidShuttleMod
             // Adding to storage is subtracting from shuttle tanks
             if (addTo)
             {
-                if (tank.tankStorage <= 0f)
+                if (tank.Storage <= 0f)
                     return;
 
                 if (!tank.transferEnabled)
                     return;
 
-                amount = Mathf.Min(tank.tankStorage, tank.supplyAllowance, 1f);
+                amount = Mathf.Min(tank.Storage, tank.supplyAllowance, 1f);
 
                 if (amount <= 0f)
                     return;
@@ -355,23 +355,25 @@ namespace HeavyLiquidShuttleMod
                 // Calculate back what the net received
                 float litersTransferred = TankState.UnitsToLiters(unitsTransferred, resource.def!);
 
-                tank.tankStorage -= litersTransferred;
+                tank.Storage -= litersTransferred;
                 tank.supplyAllowance -= litersTransferred;
+                tank.lastNetSupply = resource.def;
+                tank.lastSupplyCycle++;
 
-                if (tank.tankStorage <= 0f)
+                if (tank.Storage <= 0f)
                 {
-                    tank.tankStorage = 0f;
-                    tank.content = null;
+                    tank.Storage = 0f;
+                    tank.Content = null;
                     tank.transferEnabled = false;
                 }
             }
             // Pulling from storage is adding to shuttle tanks
             else
             {
-                if (tank.tankStorage >= tank.props.physicalCapacity)
+                if (tank.Storage >= tank.Capacity)
                     return;
 
-                amount = Mathf.Min(tank.props.physicalCapacity - tank.tankStorage, tank.receiveAllowance, 1f);
+                amount = Mathf.Min(tank.Capacity - tank.Storage, tank.receiveAllowance, 1f);
 
                 if (amount <= 0f)
                     return;
@@ -382,13 +384,15 @@ namespace HeavyLiquidShuttleMod
                 unitsTransferred = ModifyStorage(resource,storage, tank, unitsRequested, false);
 
                 if (unitsTransferred > 0f)
-                    tank.content = resource.def;
+                    tank.Content = resource.def;
 
                 // Calculate back what the net received
                 float litersTransferred = TankState.UnitsToLiters(unitsTransferred, resource.def!);
 
-                tank.tankStorage += litersTransferred;
+                tank.Storage += litersTransferred;
                 tank.receiveAllowance -= litersTransferred;
+                tank.lastNetReceive = resource.def;
+                tank.lastReceiveCycle++;
             }
 
             MassPatch.NotifyLiquidMassChanged(shuttle);
@@ -473,10 +477,10 @@ namespace HeavyLiquidShuttleMod
             {
                 if (resource.adjacentNets.Count > 0)
                 {
-                    if (shuttle.TankA!.content == resource.def && shuttle.TankA.tankStorage > 0f)
+                    if (shuttle.TankA!.Content == resource.def && shuttle.TankA.Storage > 0f)
                         yield return HeavyLiquidShuttle.CreateDischargeGizmo(shuttle, true, resource.def!);
 
-                    if (shuttle.TankB!.content == resource.def && shuttle.TankB.tankStorage > 0f)
+                    if (shuttle.TankB!.Content == resource.def && shuttle.TankB.Storage > 0f)
                         yield return HeavyLiquidShuttle.CreateDischargeGizmo(shuttle, false, resource.def!);
                 }
             }

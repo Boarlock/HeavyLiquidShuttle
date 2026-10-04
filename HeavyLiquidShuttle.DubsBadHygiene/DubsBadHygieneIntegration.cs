@@ -246,13 +246,13 @@ namespace HeavyLiquidShuttleMod
 
         private void TryPushY(CompSewageHandler sewer, TankState tank)
         {
-            if (tank.tankStorage <= 0f)
+            if (tank.Storage <= 0f)
                 return;
 
             if (!tank.transferEnabled)
                 return;
 
-            float amount = Mathf.Min(tank.tankStorage, tank.supplyAllowance, 1f);
+            float amount = Mathf.Min(tank.Storage, tank.supplyAllowance, 1f);
 
             if (amount <= 0f)
                 return;
@@ -265,24 +265,26 @@ namespace HeavyLiquidShuttleMod
             // Calculate back what the net received
             float litersTransferred = TankState.UnitsToLiters(unitsTransferred, CachedDefs.Sewage);
 
-            tank.tankStorage -= litersTransferred;
+            tank.Storage -= litersTransferred;
             tank.supplyAllowance -= litersTransferred;
+            tank.lastNetSupply = CachedDefs.Sewage;
+            tank.lastSupplyCycle++;
             MassPatch.NotifyLiquidMassChanged(Shuttle);
 
-            if (tank.tankStorage <= 0f)
+            if (tank.Storage <= 0f)
             {
-                tank.tankStorage = 0f;
-                tank.content = null;
+                tank.Storage = 0f;
+                tank.Content = null;
                 tank.transferEnabled = false;
             }
         }
 
         private void TryPullY(CompSewageHandler sewer, TankState tank)
         {
-            if (tank.tankStorage >= tank.props.physicalCapacity)
+            if (tank.Storage >= tank.Capacity)
                 return;
 
-            float amount = Mathf.Min(tank.props.physicalCapacity - tank.tankStorage, tank.receiveAllowance, 1f);
+            float amount = Mathf.Min(tank.Capacity - tank.Storage, tank.receiveAllowance, 1f);
 
             if (amount <= 0f)
                 return;
@@ -293,13 +295,15 @@ namespace HeavyLiquidShuttleMod
             float unitsTransferred = ModifyStorageY(sewer, tank, unitsRequested, false);
 
             if (unitsTransferred > 0f)
-                tank.content = LiquidTypeY;
+                tank.Content = LiquidTypeY;
 
             // Calculate back what the net gave us
             float litersTransferred = TankState.UnitsToLiters(unitsTransferred, CachedDefs.Sewage);
 
-            tank.tankStorage += litersTransferred;
+            tank.Storage += litersTransferred;
             tank.receiveAllowance -= litersTransferred;
+            tank.lastNetReceive = CachedDefs.Sewage;
+            tank.lastReceiveCycle++;
             MassPatch.NotifyLiquidMassChanged(Shuttle);
         }
 
@@ -363,16 +367,16 @@ namespace HeavyLiquidShuttleMod
             if (AdjacentXNets.Count <= 0)
                 yield break;
 
-            if (Shuttle.TankA!.content == LiquidTypeX && Shuttle.TankA.tankStorage > 0f)
+            if (Shuttle.TankA!.Content == LiquidTypeX && Shuttle.TankA.Storage > 0f)
                 yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, true, LiquidTypeX)!;
 
-            else if (Shuttle.TankA.content == LiquidTypeY && Shuttle.TankA.tankStorage > 0f)
+            else if (Shuttle.TankA.Content == LiquidTypeY && Shuttle.TankA.Storage > 0f)
                 yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, true, LiquidTypeY)!;
 
-            if (Shuttle.TankB!.content == LiquidTypeX && Shuttle.TankB.tankStorage > 0f)
+            if (Shuttle.TankB!.Content == LiquidTypeX && Shuttle.TankB.Storage > 0f)
                 yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, false, LiquidTypeX)!;
 
-            else if (Shuttle.TankB.content == LiquidTypeY && Shuttle.TankB.tankStorage > 0f)
+            else if (Shuttle.TankB.Content == LiquidTypeY && Shuttle.TankB.Storage > 0f)
                 yield return HeavyLiquidShuttle.CreateDischargeGizmo(Shuttle, false, LiquidTypeY)!;
 
         }

@@ -58,8 +58,8 @@ namespace HeavyLiquidShuttleMod
 
         public void UpdateExplosiveness()
         {
-            int tankAExplosionRadius = Mathf.RoundToInt(Shuttle.TankA!.content != null ? (Shuttle.TankA.tankStorage / Shuttle.TankA.content.unitsPerExplosionRadius) : 0);
-            int tankBExplosionRadius = Mathf.RoundToInt(Shuttle.TankB!.content != null ? (Shuttle.TankB.tankStorage / Shuttle.TankB.content.unitsPerExplosionRadius) : 0);
+            int tankAExplosionRadius = Mathf.RoundToInt(Shuttle.TankA!.Content != null ? (Shuttle.TankA.Storage / Shuttle.TankA.Content.unitsPerExplosionRadius) : 0);
+            int tankBExplosionRadius = Mathf.RoundToInt(Shuttle.TankB!.Content != null ? (Shuttle.TankB.Storage / Shuttle.TankB.Content.unitsPerExplosionRadius) : 0);
 
             explosionRadius = tankAExplosionRadius + tankBExplosionRadius;
         }
